@@ -357,21 +357,22 @@ class InvoiceClassifier {
         const modalImage = document.getElementById('modalImage');
         const modalTitle = document.getElementById('modalTitle');
         
-        // Get the file path from the results
-        const result = this.results[index];
-        if (result && result.filepath) {
-            // Extract the filename from the filepath
-            const pathParts = result.filepath.split('/');
-            const storedFilename = pathParts[pathParts.length - 1];
-            
-            // Set modal content
-            modalTitle.textContent = filename;
-            modalImage.src = `/uploads/${storedFilename}`;
-            modal.classList.add('show');
-            
-            // Prevent body scroll
-            document.body.style.overflow = 'hidden';
-        }
+        // Note: File viewing is disabled in Vercel deployment
+        modalTitle.textContent = filename;
+        modalImage.src = ''; // No image available in Vercel deployment
+        modal.classList.add('show');
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        // Show a message that file viewing is not available
+        modalImage.alt = 'File viewing not available in Vercel deployment';
+        modalImage.style.display = 'none';
+        const message = document.createElement('p');
+        message.textContent = 'File viewing is not available in this deployment. Files are processed in memory for security.';
+        message.style.textAlign = 'center';
+        message.style.color = 'var(--royal-gray)';
+        modal.querySelector('.modal-content').appendChild(message);
     }
 
     closeImageModal() {
