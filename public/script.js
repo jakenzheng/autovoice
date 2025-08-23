@@ -83,7 +83,7 @@ class InvoiceClassifier {
     handleFileSelection(files) {
         const validFiles = Array.from(files).filter(file => {
             const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff'];
-            const maxSize = 100 * 1024 * 1024; // 100MB
+            const maxSize = 10 * 1024 * 1024; // 10MB for Vercel compatibility
 
             if (!validTypes.includes(file.type)) {
                 this.showToast(`Invalid file type: ${file.name}`, 'error');
