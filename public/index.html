@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoVoice</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg class="logo-emblem" width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 4L44 24L24 44L4 24L24 4Z" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+                        <path d="M24 12L36 24L24 36L12 24L24 12Z" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                        <circle cx="24" cy="24" r="4" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                    </svg>
+                    <h1>AutoVoice</h1>
+                </div>
+                <p class="subtitle">Invoice Scanner for Auto Repair Shops</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section" id="uploadSection">
+                <div class="upload-container">
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-emblem">
+                            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                                <rect x="8" y="8" width="48" height="48" rx="4" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+                                <path d="M20 20L44 20" stroke="#1a1a1a" stroke-width="1.5"/>
+                                <path d="M20 28L44 28" stroke="#1a1a1a" stroke-width="1.5"/>
+                                <path d="M20 36L36 36" stroke="#1a1a1a" stroke-width="1.5"/>
+                                <path d="M48 16L56 16L56 24L48 24" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                            </svg>
+                        </div>
+                        <h2>Upload Documents</h2>
+                        <p>Drag & drop your invoice images or click to browse</p>
+                        <p class="upload-hint">Supports JPG, PNG, GIF, BMP, TIFF (Max 100MB each)</p>
+                        
+                        <!-- Upload Options -->
+                        <div class="upload-options">
+                            <button class="upload-btn single" onclick="document.getElementById('singleFileInput').click()">
+                                <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                    <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M6 6L14 6" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M6 10L14 10" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M6 14L10 14" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                                Single Image
+                            </button>
+                            <button class="upload-btn multiple" onclick="document.getElementById('multipleFileInput').click()">
+                                <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                    <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <rect x="4" y="4" width="12" height="12" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M6 6L14 6" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M6 10L14 10" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M6 14L10 14" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                                Multiple Images
+                            </button>
+                        </div>
+                        
+                        <input type="file" id="singleFileInput" accept="image/*" style="display: none;">
+                        <input type="file" id="multipleFileInput" multiple accept="image/*" style="display: none;">
+                    </div>
+                    
+                    <!-- File Preview -->
+                    <div class="file-preview" id="filePreview" style="display: none;">
+                        <h3>Selected Files</h3>
+                        <div class="file-list" id="fileList"></div>
+                        <button class="process-btn" id="processBtn" onclick="processInvoices()">
+                            <svg class="btn-emblem" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2L22 8.5V15.5L12 22L2 15.5V8.5L12 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M12 6L18 9.5V13.5L12 17L6 13.5V9.5L12 6Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Process Documents
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading Section -->
+            <section class="loading-section" id="loadingSection" style="display: none;">
+                <div class="loading-container">
+                    <div class="loading-emblem">
+                        <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                            <circle cx="40" cy="40" r="36" stroke="#1a1a1a" stroke-width="2" fill="none" opacity="0.2"/>
+                            <path d="M40 4A36 36 0 0 1 76 40" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round">
+                                <animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="2s" repeatCount="indefinite"/>
+                            </path>
+                        </svg>
+                    </div>
+                    <h2>Processing Documents</h2>
+                    <p>Analyzing your documents with precision...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="processing-status" id="processingStatus"></div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-container">
+                    <!-- Summary Cards -->
+                    <div class="summary-grid">
+                        <div class="summary-card primary">
+                            <div class="card-emblem">
+                                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                    <path d="M8 8L24 8L24 24L8 24L8 8Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M12 12L20 12" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M12 16L20 16" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M12 20L16 20" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </div>
+                            <div class="card-content">
+                                <h3>Total Parts</h3>
+                                <p class="amount" id="totalParts">$0.00</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-card secondary">
+                            <div class="card-emblem">
+                                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                    <path d="M16 4L28 16L16 28L4 16L16 4Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M16 10L22 16L16 22L10 16L16 10Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                </svg>
+                            </div>
+                            <div class="card-content">
+                                <h3>Total Labor</h3>
+                                <p class="amount" id="totalLabor">$0.00</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-card tertiary">
+                            <div class="card-emblem">
+                                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                    <rect x="4" y="8" width="24" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M8 12L24 12" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M8 16L20 16" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M8 20L16 20" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </div>
+                            <div class="card-content">
+                                <h3>Total Tax</h3>
+                                <p class="amount" id="totalTax">$0.00</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-card info">
+                            <div class="card-emblem">
+                                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                    <path d="M8 4L24 4L24 28L8 28L8 4Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M12 8L20 8" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M12 12L20 12" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M12 16L20 16" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M12 20L16 20" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </div>
+                            <div class="card-content">
+                                <h3>Processed</h3>
+                                <p class="amount" id="processedCount">0</p>
+                                <small id="flaggedCount">0 flagged</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Table -->
+                    <div class="results-table-container">
+                        <h3>Document Details</h3>
+                        <div class="table-wrapper">
+                            <table class="results-table" id="resultsTable">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Parts</th>
+                                        <th>Labor</th>
+                                        <th>Tax</th>
+                                        <th>Status</th>
+                                        <th>Confidence</th>
+                                        <th>View</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button class="btn-secondary" onclick="resetApp()">
+                            <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2C14.4183 2 18 5.58172 18 10C18 14.4183 14.4183 18 10 18C5.58172 18 2 14.4183 2 10C2 5.58172 5.58172 2 10 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M10 6L10 10L14 10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Process New Batch
+                        </button>
+                        <button class="btn-primary" onclick="exportResults()">
+                            <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2L10 18" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M6 14L10 18L14 14" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M2 18L18 18" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                            Export Results
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+        
+        <!-- Image Modal -->
+        <div class="image-modal" id="imageModal">
+            <div class="modal-content">
+                <button class="close-modal" id="closeModal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M6 6L18 18" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                </button>
+                <h3 id="modalTitle">Document Image</h3>
+                <img id="modalImage" src="" alt="Document">
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
