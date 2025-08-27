@@ -45,31 +45,19 @@
                         <p>Drag & drop your invoice images or click to browse</p>
                         <p class="upload-hint">Supports JPG, PNG, GIF, BMP, TIFF (Max 10MB each)</p>
                         
-                        <!-- Upload Options -->
+                        <!-- Upload Button -->
                         <div class="upload-options">
-                            <button class="upload-btn single" onclick="document.getElementById('singleFileInput').click()">
-                                <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                                    <path d="M6 6L14 6" stroke="currentColor" stroke-width="1.5"/>
-                                    <path d="M6 10L14 10" stroke="currentColor" stroke-width="1.5"/>
-                                    <path d="M6 14L10 14" stroke="currentColor" stroke-width="1.5"/>
+                            <button class="upload-btn unified" onclick="document.getElementById('fileInput').click()">
+                                <svg class="btn-emblem" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2L22 8.5V15.5L12 22L2 15.5V8.5L12 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M12 6L18 9.5V13.5L12 17L6 13.5V9.5L12 6Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
                                 </svg>
-                                Single Image
-                            </button>
-                            <button class="upload-btn multiple" onclick="document.getElementById('multipleFileInput').click()">
-                                <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                                    <rect x="4" y="4" width="12" height="12" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                                    <path d="M6 6L14 6" stroke="currentColor" stroke-width="1.5"/>
-                                    <path d="M6 10L14 10" stroke="currentColor" stroke-width="1.5"/>
-                                    <path d="M6 14L10 14" stroke="currentColor" stroke-width="1.5"/>
-                                </svg>
-                                Multiple Images
+                                Upload Documents
                             </button>
                         </div>
                         
-                        <input type="file" id="singleFileInput" accept="image/*" style="display: none;">
-                        <input type="file" id="multipleFileInput" multiple accept="image/*" style="display: none;">
+                        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
                     </div>
                     
                     <!-- File Preview -->

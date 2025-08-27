@@ -13,13 +13,8 @@ class InvoiceClassifier {
     }
 
     setupEventListeners() {
-        // Single file input change
-        document.getElementById('singleFileInput').addEventListener('change', (e) => {
-            this.handleFileSelection(e.target.files);
-        });
-
-        // Multiple file input change
-        document.getElementById('multipleFileInput').addEventListener('change', (e) => {
+        // Unified file input change
+        document.getElementById('fileInput').addEventListener('change', (e) => {
             this.handleFileSelection(e.target.files);
         });
 

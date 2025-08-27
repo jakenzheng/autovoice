@@ -238,25 +238,54 @@ body {
   background: var(--royal-black);
   color: var(--royal-white);
   border: none;
-  padding: var(--space-4) var(--space-8);
+  padding: var(--space-5) var(--space-10);
   border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   transition: all var(--transition-normal);
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   box-shadow: var(--shadow-medium);
-  min-width: 160px;
+  min-width: 200px;
   justify-content: center;
   letter-spacing: 0.025em;
+}
+
+.upload-btn.unified {
+  background: linear-gradient(135deg, var(--royal-black) 0%, #2a2a2a 100%);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+
+.upload-btn.unified::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: var(--radius-md);
+  padding: 2px;
+  background: linear-gradient(135deg, var(--royal-gold) 0%, var(--royal-copper) 100%);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
 }
 
 .upload-btn:hover {
   background: var(--royal-gray);
   transform: translateY(-2px);
   box-shadow: var(--shadow-lift);
+}
+
+.upload-btn.unified:hover {
+  background: linear-gradient(135deg, var(--royal-gray) 0%, #3a3a3a 100%);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift), 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .upload-btn:active {
@@ -842,7 +871,9 @@ body {
   
   .upload-btn {
     width: 100%;
-    max-width: 300px;
+    max-width: 320px;
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--text-base);
   }
   
   .summary-grid {
