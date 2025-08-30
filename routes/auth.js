@@ -166,7 +166,19 @@ router.post('/signout', async (req, res) => {
 
 router.get('/me', async (req, res) => {
     try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        // Get the authorization header
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+        if (!token) {
+            return res.status(401).json({
+                error: 'Not authenticated',
+                message: 'Please sign in to continue'
+            });
+        }
+
+        // Set the auth token for this request
+        const { data: { user }, error } = await supabase.auth.getUser(token);
         
         if (error || !user) {
             return res.status(401).json({

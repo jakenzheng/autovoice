@@ -406,7 +406,19 @@ class InvoiceClassifier {
     // Authentication methods
     async checkAuthStatus() {
         try {
-            const response = await fetch('/api/auth/me');
+            // Get the stored session token
+            const sessionToken = localStorage.getItem('supabase.auth.token');
+            
+            if (!sessionToken) {
+                this.logout();
+                return;
+            }
+
+            const response = await fetch('/api/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${sessionToken}`
+                }
+            });
             
             if (response.ok) {
                 const data = await response.json();
@@ -448,6 +460,7 @@ class InvoiceClassifier {
         currentUser = null;
         authToken = null;
         localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('supabase.auth.refreshToken');
         this.updateAuthUI();
         this.showToast('Logged out successfully', 'success');
     }
@@ -489,6 +502,9 @@ async function handleLogin(event) {
             // Store the session token
             if (data.session) {
                 localStorage.setItem('supabase.auth.token', data.session.access_token);
+                if (data.session.refresh_token) {
+                    localStorage.setItem('supabase.auth.refreshToken', data.session.refresh_token);
+                }
             }
             
             window.invoiceClassifier.updateAuthUI();
