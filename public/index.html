@@ -23,6 +23,31 @@
                     <h1>AutoVoice</h1>
                 </div>
                 <p class="subtitle">Invoice Scanner for Auto Repair Shops</p>
+                
+                <!-- User Menu -->
+                <div class="user-menu" id="userMenu" style="display: none;">
+                    <div class="user-info">
+                        <span id="userName">User</span>
+                        <button class="user-menu-btn" onclick="toggleUserMenu()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M10 6L10 14" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M6 10L14 10" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="user-dropdown" id="userDropdown" style="display: none;">
+                        <button onclick="showDashboard()">Dashboard</button>
+                        <button onclick="showProfile()">Profile</button>
+                        <button onclick="logout()">Logout</button>
+                    </div>
+                </div>
+                
+                <!-- Auth Buttons -->
+                <div class="auth-buttons" id="authButtons">
+                    <button class="auth-btn login" onclick="showLoginModal()">Login</button>
+                    <button class="auth-btn register" onclick="showRegisterModal()">Register</button>
+                </div>
             </div>
         </header>
 
@@ -208,6 +233,96 @@
 
         <!-- Toast Notifications -->
         <div class="toast-container" id="toastContainer"></div>
+        
+        <!-- Login Modal -->
+        <div class="modal" id="loginModal" style="display: none;">
+            <div class="modal-content auth-modal">
+                <div class="modal-header">
+                    <h3>Login</h3>
+                    <button class="close-btn" onclick="closeLoginModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm" onsubmit="handleLogin(event)">
+                        <div class="form-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" id="loginEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Password</label>
+                            <input type="password" id="loginPassword" required>
+                        </div>
+                        <button type="submit" class="auth-submit-btn">Login</button>
+                    </form>
+                    <p class="auth-switch">
+                        Don't have an account? <a href="#" onclick="switchToRegister()">Register</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div class="modal" id="registerModal" style="display: none;">
+            <div class="modal-content auth-modal">
+                <div class="modal-header">
+                    <h3>Register</h3>
+                    <button class="close-btn" onclick="closeRegisterModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm" onsubmit="handleRegister(event)">
+                        <div class="form-group">
+                            <label for="registerFirstName">First Name</label>
+                            <input type="text" id="registerFirstName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerLastName">Last Name</label>
+                            <input type="text" id="registerLastName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerEmail">Email</label>
+                            <input type="email" id="registerEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerBusinessName">Business Name (Optional)</label>
+                            <input type="text" id="registerBusinessName">
+                        </div>
+                        <div class="form-group">
+                            <label for="registerPassword">Password</label>
+                            <input type="password" id="registerPassword" required minlength="8">
+                        </div>
+                        <button type="submit" class="auth-submit-btn">Register</button>
+                    </form>
+                    <p class="auth-switch">
+                        Already have an account? <a href="#" onclick="switchToLogin()">Login</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Modal -->
+        <div class="modal" id="dashboardModal" style="display: none;">
+            <div class="modal-content dashboard-modal">
+                <div class="modal-header">
+                    <h3>Dashboard</h3>
+                    <button class="close-btn" onclick="closeDashboardModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="dashboard-tabs">
+                        <button class="tab-btn active" onclick="switchTab('batches')">Batches</button>
+                        <button class="tab-btn" onclick="switchTab('analytics')">Analytics</button>
+                        <button class="tab-btn" onclick="switchTab('flagged')">Flagged Documents</button>
+                    </div>
+                    <div class="tab-content" id="batchesTab">
+                        <div class="batches-list" id="batchesList"></div>
+                    </div>
+                    <div class="tab-content" id="analyticsTab" style="display: none;">
+                        <div class="analytics-content" id="analyticsContent"></div>
+                    </div>
+                    <div class="tab-content" id="flaggedTab" style="display: none;">
+                        <div class="flagged-list" id="flaggedList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- Image Modal -->
         <div class="image-modal" id="imageModal">

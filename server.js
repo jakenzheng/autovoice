@@ -5,14 +5,40 @@ const path = require('path');
 const fs = require('fs');
 const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const helmet = require('helmet');
 require('dotenv').config();
+
+// Import authentication and data persistence modules
+const authRoutes = require('./routes/auth');
+const batchRoutes = require('./routes/batches');
+const invoiceRoutes = require('./routes/invoices');
+const analyticsRoutes = require('./routes/analytics');
+const { supabase } = require('./supabase-config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://api.openai.com", "https://generativelanguage.googleapis.com"]
+    }
+  }
+}));
+
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://invoice-classifier-kqz3uci7u-jakenzhengs-projects.vercel.app']
+    : true,
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
 // OpenAI configuration
@@ -220,6 +246,12 @@ Return ONLY valid JSON in this exact format:
   }
 }
 
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/batches', batchRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -231,6 +263,44 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    // Get user ID from request (will be set by auth middleware)
+    const userId = req.user?.id;
+    const batchName = req.body.batchName || `Batch ${new Date().toLocaleDateString()}`;
+    const description = req.body.description || '';
+
+    // Create batch if user is authenticated
+    let batchId = null;
+    if (userId) {
+      try {
+        const { data: batch, error: batchError } = await supabase
+          .from('batches')
+          .insert({
+            user_id: userId,
+            batch_name: batchName,
+            description: description,
+            status: 'processing',
+            total_invoices: req.files.length,
+            processed_invoices: 0,
+            summary: {
+              totalParts: 0,
+              totalLabor: 0,
+              totalTax: 0,
+              flaggedCount: 0
+            }
+          })
+          .select('id')
+          .single();
+
+        if (batchError) {
+          console.error('Batch creation error:', batchError);
+        } else {
+          batchId = batch.id;
+        }
+      } catch (error) {
+        console.error('Batch creation error:', error);
+      }
     }
 
     const results = [];
@@ -268,6 +338,37 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
         } else {
           flaggedCount++;
         }
+
+        // Save invoice to database if user is authenticated
+        if (userId && batchId) {
+          try {
+            await supabase
+              .from('invoices')
+              .insert({
+                batch_id: batchId,
+                user_id: userId,
+                original_filename: file.originalname,
+                file_size: file.size,
+                mime_type: file.mimetype,
+                image_url: null, // Will be updated when file storage is implemented
+                thumbnail_url: null,
+                extracted_data: {
+                  parts: data.parts,
+                  labor: data.labor,
+                  tax: data.tax,
+                  flagged: data.flagged,
+                  confidence: data.confidence
+                },
+                processing_metadata: {
+                  processedAt: new Date().toISOString(),
+                  aiModel: 'gpt-4o',
+                  processingTime: Date.now() - Date.now() // Placeholder
+                }
+              });
+          } catch (error) {
+            console.error('Invoice save error:', error);
+          }
+        }
       } else {
         results.push({
           filename: file.originalname,
@@ -280,7 +381,29 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       }
     }
 
-    // No file cleanup needed with memory storage
+    // Update batch with final summary if user is authenticated
+    if (userId && batchId) {
+      try {
+        const summary = {
+          totalParts: parseFloat(totalParts.toFixed(2)),
+          totalLabor: parseFloat(totalLabor.toFixed(2)),
+          totalTax: parseFloat(totalTax.toFixed(2)),
+          flaggedCount
+        };
+
+        await supabase
+          .from('batches')
+          .update({
+            status: 'completed',
+            processed_invoices: results.length,
+            summary: summary,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', batchId);
+      } catch (error) {
+        console.error('Batch update error:', error);
+      }
+    }
 
     const summary = {
       totalParts: parseFloat(totalParts.toFixed(2)),
@@ -302,7 +425,8 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
     res.json({
       success: true,
       results,
-      summary
+      summary,
+      batchId: batchId
     });
 
   } catch (error) {

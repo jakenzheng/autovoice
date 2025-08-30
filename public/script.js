@@ -1,10 +1,15 @@
 // Royal Clarity - Invoice Classifier Frontend JavaScript
 
+// Global authentication state
+let currentUser = null;
+let authToken = localStorage.getItem('authToken');
+
 class InvoiceClassifier {
     constructor() {
         this.selectedFiles = [];
         this.results = [];
         this.init();
+        this.checkAuthStatus();
     }
 
     init() {
@@ -397,6 +402,53 @@ class InvoiceClassifier {
             }
         }, 5000);
     }
+
+    // Authentication methods
+    async checkAuthStatus() {
+        if (authToken) {
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    this.updateAuthUI();
+                } else {
+                    this.logout();
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                this.logout();
+            }
+        }
+    }
+
+    updateAuthUI() {
+        const authButtons = document.getElementById('authButtons');
+        const userMenu = document.getElementById('userMenu');
+        const userName = document.getElementById('userName');
+
+        if (currentUser) {
+            authButtons.style.display = 'none';
+            userMenu.style.display = 'flex';
+            userName.textContent = `${currentUser.firstName} ${currentUser.lastName}`;
+        } else {
+            authButtons.style.display = 'flex';
+            userMenu.style.display = 'none';
+        }
+    }
+
+    logout() {
+        currentUser = null;
+        authToken = null;
+        localStorage.removeItem('authToken');
+        this.updateAuthUI();
+        this.showToast('Logged out successfully', 'success');
+    }
 }
 
 // Global functions for HTML onclick handlers
@@ -410,6 +462,190 @@ function resetApp() {
 
 function exportResults() {
     window.invoiceClassifier.exportResults();
+}
+
+// Authentication functions
+async function handleLogin(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            authToken = data.tokens.accessToken;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            
+            window.invoiceClassifier.updateAuthUI();
+            closeLoginModal();
+            window.invoiceClassifier.showToast('Login successful', 'success');
+        } else {
+            window.invoiceClassifier.showToast(data.message || 'Login failed', 'error');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        window.invoiceClassifier.showToast('Login failed', 'error');
+    }
+}
+
+async function handleRegister(event) {
+    event.preventDefault();
+    
+    const firstName = document.getElementById('registerFirstName').value;
+    const lastName = document.getElementById('registerLastName').value;
+    const email = document.getElementById('registerEmail').value;
+    const businessName = document.getElementById('registerBusinessName').value;
+    const password = document.getElementById('registerPassword').value;
+    
+    try {
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                firstName, 
+                lastName, 
+                email, 
+                businessName, 
+                password 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            authToken = data.tokens.accessToken;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            
+            window.invoiceClassifier.updateAuthUI();
+            closeRegisterModal();
+            window.invoiceClassifier.showToast('Registration successful', 'success');
+        } else {
+            window.invoiceClassifier.showToast(data.message || 'Registration failed', 'error');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        window.invoiceClassifier.showToast('Registration failed', 'error');
+    }
+}
+
+function showLoginModal() {
+    document.getElementById('loginModal').style.display = 'flex';
+}
+
+function closeLoginModal() {
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('loginForm').reset();
+}
+
+function showRegisterModal() {
+    document.getElementById('registerModal').style.display = 'flex';
+}
+
+function closeRegisterModal() {
+    document.getElementById('registerModal').style.display = 'none';
+    document.getElementById('registerForm').reset();
+}
+
+function switchToRegister() {
+    closeLoginModal();
+    showRegisterModal();
+}
+
+function switchToLogin() {
+    closeRegisterModal();
+    showLoginModal();
+}
+
+function toggleUserMenu() {
+    const dropdown = document.getElementById('userDropdown');
+    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+}
+
+function showDashboard() {
+    document.getElementById('dashboardModal').style.display = 'flex';
+    loadDashboard();
+}
+
+function closeDashboardModal() {
+    document.getElementById('dashboardModal').style.display = 'none';
+}
+
+function switchTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    
+    // Remove active class from all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    document.getElementById(`${tabName}Tab`).style.display = 'block';
+    
+    // Add active class to selected tab button
+    event.target.classList.add('active');
+}
+
+async function loadDashboard() {
+    if (!currentUser) return;
+    
+    try {
+        const response = await fetch('/api/batches', {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayBatches(data.batches);
+        }
+    } catch (error) {
+        console.error('Dashboard load error:', error);
+    }
+}
+
+function displayBatches(batches) {
+    const batchesList = document.getElementById('batchesList');
+    
+    if (batches.length === 0) {
+        batchesList.innerHTML = '<p>No batches found. Process some invoices to see them here.</p>';
+        return;
+    }
+    
+    batchesList.innerHTML = batches.map(batch => `
+        <div class="batch-item">
+            <h4>${batch.batch_name}</h4>
+            <p>Status: ${batch.status}</p>
+            <p>Invoices: ${batch.total_invoices}</p>
+            <p>Created: ${new Date(batch.created_at).toLocaleDateString()}</p>
+        </div>
+    `).join('');
+}
+
+function showProfile() {
+    // TODO: Implement profile management
+    window.invoiceClassifier.showToast('Profile management coming soon', 'info');
+}
+
+function logout() {
+    window.invoiceClassifier.logout();
 }
 
 // Initialize the application when DOM is loaded
