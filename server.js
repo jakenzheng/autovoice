@@ -26,16 +26,21 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
 
-// Supabase configuration
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error('Missing Supabase environment variables');
-    process.exit(1);
+// Supabase configuration (optional - will work without it)
+let supabase = null;
+try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    
+    if (supabaseUrl && supabaseKey) {
+        supabase = createClient(supabaseUrl, supabaseKey);
+        console.log('✅ Supabase connected successfully');
+    } else {
+        console.log('⚠️  Supabase environment variables not found - running in demo mode');
+    }
+} catch (error) {
+    console.log('⚠️  Supabase connection failed - running in demo mode');
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
@@ -147,7 +152,11 @@ app.get('/socket.io/socket.io.js', (req, res) => {
 
 // Test route
 app.get('/test', (req, res) => {
-    res.json({ message: 'Server is running!', timestamp: new Date().toISOString() });
+    res.json({ 
+        message: 'Server is running!', 
+        timestamp: new Date().toISOString(),
+        supabase: supabase ? 'connected' : 'demo mode'
+    });
 });
 
 // Upload route with enhanced error handling
@@ -166,11 +175,11 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
         
         console.log(`Processing ${files.length} invoices...`);
 
-        // Get user from auth header
+        // Get user from auth header (optional)
         const authHeader = req.headers.authorization;
         let userId = null;
         
-        if (authHeader && authHeader.startsWith('Bearer ')) {
+        if (authHeader && authHeader.startsWith('Bearer ') && supabase) {
             try {
                 const token = authHeader.substring(7);
                 const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -182,35 +191,36 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
             }
         }
 
-        // Create batch record
+        // Create batch record (optional - only if Supabase is available)
         let batchId = null;
-        try {
-            const { data: batch, error: batchError } = await supabase
-                .from('batches')
-                .insert({
-                    user_id: userId,
-                    batch_name: batchName,
-                    description: description,
-                    status: 'processing',
-                    total_invoices: files.length,
-                    processed_invoices: 0,
-                    total_parts: 0,
-                    total_labor: 0,
-                    total_tax: 0,
-                    flagged_count: 0,
-                    processing_started_at: new Date().toISOString()
-                })
-                .select()
-                .single();
+        if (supabase) {
+            try {
+                const { data: batch, error: batchError } = await supabase
+                    .from('batches')
+                    .insert({
+                        user_id: userId,
+                        batch_name: batchName,
+                        description: description,
+                        status: 'processing',
+                        total_invoices: files.length,
+                        processed_invoices: 0,
+                        total_parts: 0,
+                        total_labor: 0,
+                        total_tax: 0,
+                        flagged_count: 0,
+                        processing_started_at: new Date().toISOString()
+                    })
+                    .select()
+                    .single();
 
-            if (batchError) {
-                console.error('Batch creation error:', batchError);
-                // Continue without batch ID if table doesn't exist
-            } else {
-                batchId = batch.id;
+                if (batchError) {
+                    console.error('Batch creation error:', batchError);
+                } else {
+                    batchId = batch.id;
+                }
+            } catch (error) {
+                console.log('Batches table not available, proceeding without batch tracking');
             }
-        } catch (error) {
-            console.log('Batches table not available, proceeding without batch tracking');
         }
 
         const results = [];
@@ -245,8 +255,8 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                 // Simulate AI processing (replace with actual OpenAI call)
                 const data = await processInvoiceWithAI(optimizedBuffer);
 
-                // Store file record
-                if (batchId) {
+                // Store file record (optional - only if Supabase is available)
+                if (supabase && batchId) {
                     try {
                         await supabase
                             .from('files')
@@ -306,8 +316,8 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
             }
         }
 
-        // Update batch status
-        if (batchId) {
+        // Update batch status (optional - only if Supabase is available)
+        if (supabase && batchId) {
             try {
                 await supabase
                     .from('batches')
@@ -401,7 +411,8 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        supabase: supabase ? 'connected' : 'demo mode'
     });
 });
 
@@ -413,6 +424,9 @@ server.listen(PORT, () => {
     console.log('✨ Luxury automotive invoice processing ready with OpenAI GPT-4 Vision');
     console.log('📊 Processing up to 50 invoices per batch');
     console.log('🔌 Socket.io real-time updates enabled');
+    if (!supabase) {
+        console.log('⚠️  Running in DEMO MODE - no database required');
+    }
 });
 
 // Graceful shutdown
