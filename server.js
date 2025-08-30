@@ -265,8 +265,17 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
-    // Get user ID from request (will be set by auth middleware)
-    const userId = req.user?.id;
+    // Get user ID from Supabase Auth
+    let userId = null;
+    try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (user) {
+            userId = user.id;
+        }
+    } catch (error) {
+        console.error('Auth check error:', error);
+    }
+
     const batchName = req.body.batchName || `Batch ${new Date().toLocaleDateString()}`;
     const description = req.body.description || '';
 

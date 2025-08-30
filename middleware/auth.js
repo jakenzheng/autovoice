@@ -1,10 +1,6 @@
-const jwt = require('jsonwebtoken');
 const { supabase } = require('../supabase-config');
 
-// JWT secret from environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
-
-// Middleware to verify JWT token
+// Middleware to verify Supabase session
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -17,47 +13,39 @@ const authenticateToken = async (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
-        // Verify user exists in database
-        const { data: user, error } = await supabase
+        // Set the auth token for this request
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+
+        if (error || !user) {
+            return res.status(401).json({ 
+                error: 'Invalid token',
+                message: 'Invalid authentication token'
+            });
+        }
+
+        // Get user profile from our users table
+        const { data: profile, error: profileError } = await supabase
             .from('users')
             .select('id, email, first_name, last_name, business_name, is_active')
-            .eq('id', decoded.userId)
+            .eq('id', user.id)
             .single();
 
-        if (error || !user || !user.is_active) {
+        if (profileError || !profile || !profile.is_active) {
             return res.status(401).json({ 
                 error: 'Invalid token',
                 message: 'User not found or account inactive'
             });
         }
 
-        req.user = user;
+        req.user = profile;
         next();
     } catch (error) {
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ 
-                error: 'Token expired',
-                message: 'Your session has expired. Please log in again.'
-            });
-        }
-        
+        console.error('Auth middleware error:', error);
         return res.status(403).json({ 
             error: 'Invalid token',
             message: 'Invalid authentication token'
         });
     }
-};
-
-// Generate JWT token
-const generateToken = (userId) => {
-    return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
-};
-
-// Generate refresh token
-const generateRefreshToken = (userId) => {
-    return jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
 };
 
 // Rate limiting middleware

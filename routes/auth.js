@@ -1,188 +1,137 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const { supabase } = require('../supabase-config');
-const { generateToken, generateRefreshToken, authenticateToken, authRateLimit } = require('../middleware/auth');
+const { apiRateLimit } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Input validation middleware
-const validateRegistration = (req, res, next) => {
-    const { email, password, firstName, lastName, businessName } = req.body;
-    
-    if (!email || !password || !firstName || !lastName) {
-        return res.status(400).json({
-            error: 'Missing required fields',
-            message: 'Email, password, first name, and last name are required'
-        });
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        return res.status(400).json({
-            error: 'Invalid email format',
-            message: 'Please provide a valid email address'
-        });
-    }
-
-    // Password validation
-    if (password.length < 8) {
-        return res.status(400).json({
-            error: 'Password too short',
-            message: 'Password must be at least 8 characters long'
-        });
-    }
-
-    next();
-};
-
-const validateLogin = (req, res, next) => {
-    const { email, password } = req.body;
-    
-    if (!email || !password) {
-        return res.status(400).json({
-            error: 'Missing credentials',
-            message: 'Email and password are required'
-        });
-    }
-
-    next();
-};
-
-// User registration
-router.post('/register', authRateLimit, validateRegistration, async (req, res) => {
+// Supabase Auth routes
+router.post('/signup', apiRateLimit, async (req, res) => {
     try {
         const { email, password, firstName, lastName, businessName } = req.body;
 
-        // Check if user already exists
-        const { data: existingUser, error: checkError } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', email)
-            .single();
-
-        if (existingUser) {
-            return res.status(409).json({
-                error: 'User already exists',
-                message: 'An account with this email already exists'
+        if (!email || !password || !firstName || !lastName) {
+            return res.status(400).json({
+                error: 'Missing required fields',
+                message: 'Email, password, first name, and last name are required'
             });
         }
 
-        // Hash password
-        const saltRounds = 12;
-        const passwordHash = await bcrypt.hash(password, saltRounds);
+        // Create user with Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    first_name: firstName,
+                    last_name: lastName,
+                    business_name: businessName || null
+                }
+            }
+        });
 
-        // Create user
-        const { data: user, error: createError } = await supabase
-            .from('users')
-            .insert({
-                email,
-                password_hash: passwordHash,
-                first_name: firstName,
-                last_name: lastName,
-                business_name: businessName || null
-            })
-            .select('id, email, first_name, last_name, business_name, created_at')
-            .single();
-
-        if (createError) {
-            console.error('User creation error:', createError);
-            return res.status(500).json({
-                error: 'Registration failed',
-                message: 'Unable to create user account'
+        if (authError) {
+            console.error('Signup error:', authError);
+            return res.status(400).json({
+                error: 'Signup failed',
+                message: authError.message
             });
         }
 
-        // Generate tokens
-        const accessToken = generateToken(user.id);
-        const refreshToken = generateRefreshToken(user.id);
+        // Create user profile in our users table
+        if (authData.user) {
+            const { error: profileError } = await supabase
+                .from('users')
+                .insert({
+                    id: authData.user.id,
+                    email: authData.user.email,
+                    first_name: firstName,
+                    last_name: lastName,
+                    business_name: businessName || null,
+                    email_verified: authData.user.email_confirmed_at ? true : false,
+                    is_active: true
+                });
+
+            if (profileError) {
+                console.error('Profile creation error:', profileError);
+            }
+        }
 
         res.status(201).json({
-            message: 'User registered successfully',
+            message: 'Account created successfully. Please check your email to verify your account.',
             user: {
-                id: user.id,
-                email: user.email,
-                firstName: user.first_name,
-                lastName: user.last_name,
-                businessName: user.business_name
-            },
-            tokens: {
-                accessToken,
-                refreshToken
+                id: authData.user?.id,
+                email: authData.user?.email,
+                firstName,
+                lastName,
+                businessName
             }
         });
 
     } catch (error) {
-        console.error('Registration error:', error);
+        console.error('Signup error:', error);
         res.status(500).json({
             error: 'Internal server error',
-            message: 'Registration failed due to server error'
+            message: 'Signup failed due to server error'
         });
     }
 });
 
-// User login
-router.post('/login', authRateLimit, validateLogin, async (req, res) => {
+router.post('/signin', apiRateLimit, async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Find user by email
-        const { data: user, error: findError } = await supabase
+        if (!email || !password) {
+            return res.status(400).json({
+                error: 'Missing credentials',
+                message: 'Email and password are required'
+            });
+        }
+
+        // Sign in with Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (authError) {
+            console.error('Signin error:', authError);
+            return res.status(401).json({
+                error: 'Invalid credentials',
+                message: 'Email or password is incorrect'
+            });
+        }
+
+        // Get user profile
+        const { data: user, error: profileError } = await supabase
             .from('users')
-            .select('id, email, password_hash, first_name, last_name, business_name, is_active')
-            .eq('email', email)
+            .select('*')
+            .eq('id', authData.user.id)
             .single();
 
-        if (findError || !user) {
-            return res.status(401).json({
-                error: 'Invalid credentials',
-                message: 'Email or password is incorrect'
-            });
-        }
-
-        if (!user.is_active) {
-            return res.status(401).json({
-                error: 'Account inactive',
-                message: 'Your account has been deactivated'
-            });
-        }
-
-        // Verify password
-        const isValidPassword = await bcrypt.compare(password, user.password_hash);
-        if (!isValidPassword) {
-            return res.status(401).json({
-                error: 'Invalid credentials',
-                message: 'Email or password is incorrect'
-            });
+        if (profileError) {
+            console.error('Profile fetch error:', profileError);
         }
 
         // Update last login
         await supabase
             .from('users')
             .update({ last_login: new Date().toISOString() })
-            .eq('id', user.id);
-
-        // Generate tokens
-        const accessToken = generateToken(user.id);
-        const refreshToken = generateRefreshToken(user.id);
+            .eq('id', authData.user.id);
 
         res.json({
             message: 'Login successful',
             user: {
-                id: user.id,
-                email: user.email,
-                firstName: user.first_name,
-                lastName: user.last_name,
-                businessName: user.business_name
+                id: authData.user.id,
+                email: authData.user.email,
+                firstName: user?.first_name || authData.user.user_metadata?.first_name,
+                lastName: user?.last_name || authData.user.user_metadata?.last_name,
+                businessName: user?.business_name
             },
-            tokens: {
-                accessToken,
-                refreshToken
-            }
+            session: authData.session
         });
 
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Signin error:', error);
         res.status(500).json({
             error: 'Internal server error',
             message: 'Login failed due to server error'
@@ -190,18 +139,63 @@ router.post('/login', authRateLimit, validateLogin, async (req, res) => {
     }
 });
 
-// Get current user
-router.get('/me', authenticateToken, async (req, res) => {
+router.post('/signout', async (req, res) => {
     try {
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+            console.error('Signout error:', error);
+            return res.status(500).json({
+                error: 'Signout failed',
+                message: error.message
+            });
+        }
+
+        res.json({
+            message: 'Logged out successfully'
+        });
+
+    } catch (error) {
+        console.error('Signout error:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: 'Logout failed due to server error'
+        });
+    }
+});
+
+router.get('/me', async (req, res) => {
+    try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
+            return res.status(401).json({
+                error: 'Not authenticated',
+                message: 'Please sign in to continue'
+            });
+        }
+
+        // Get user profile
+        const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError) {
+            console.error('Profile fetch error:', profileError);
+        }
+
         res.json({
             user: {
-                id: req.user.id,
-                email: req.user.email,
-                firstName: req.user.first_name,
-                lastName: req.user.last_name,
-                businessName: req.user.business_name
+                id: user.id,
+                email: user.email,
+                firstName: profile?.first_name || user.user_metadata?.first_name,
+                lastName: profile?.last_name || user.user_metadata?.last_name,
+                businessName: profile?.business_name
             }
         });
+
     } catch (error) {
         console.error('Get user error:', error);
         res.status(500).json({
@@ -211,11 +205,18 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
 });
 
-// Update user profile
-router.put('/profile', authenticateToken, async (req, res) => {
+router.put('/profile', async (req, res) => {
     try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+            return res.status(401).json({
+                error: 'Not authenticated',
+                message: 'Please sign in to continue'
+            });
+        }
+
         const { firstName, lastName, businessName } = req.body;
-        const userId = req.user.id;
 
         const updateData = {};
         if (firstName !== undefined) updateData.first_name = firstName;
@@ -232,8 +233,8 @@ router.put('/profile', authenticateToken, async (req, res) => {
         const { data: updatedUser, error: updateError } = await supabase
             .from('users')
             .update(updateData)
-            .eq('id', userId)
-            .select('id, email, first_name, last_name, business_name')
+            .eq('id', user.id)
+            .select('*')
             .single();
 
         if (updateError) {
@@ -260,97 +261,6 @@ router.put('/profile', authenticateToken, async (req, res) => {
         res.status(500).json({
             error: 'Internal server error',
             message: 'Profile update failed due to server error'
-        });
-    }
-});
-
-// Change password
-router.put('/change-password', authenticateToken, async (req, res) => {
-    try {
-        const { currentPassword, newPassword } = req.body;
-        const userId = req.user.id;
-
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({
-                error: 'Missing passwords',
-                message: 'Current password and new password are required'
-            });
-        }
-
-        if (newPassword.length < 8) {
-            return res.status(400).json({
-                error: 'Password too short',
-                message: 'New password must be at least 8 characters long'
-            });
-        }
-
-        // Get current password hash
-        const { data: user, error: findError } = await supabase
-            .from('users')
-            .select('password_hash')
-            .eq('id', userId)
-            .single();
-
-        if (findError || !user) {
-            return res.status(404).json({
-                error: 'User not found',
-                message: 'User account not found'
-            });
-        }
-
-        // Verify current password
-        const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
-        if (!isValidPassword) {
-            return res.status(401).json({
-                error: 'Invalid password',
-                message: 'Current password is incorrect'
-            });
-        }
-
-        // Hash new password
-        const saltRounds = 12;
-        const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
-
-        // Update password
-        const { error: updateError } = await supabase
-            .from('users')
-            .update({ password_hash: newPasswordHash })
-            .eq('id', userId);
-
-        if (updateError) {
-            console.error('Password update error:', updateError);
-            return res.status(500).json({
-                error: 'Update failed',
-                message: 'Unable to update password'
-            });
-        }
-
-        res.json({
-            message: 'Password changed successfully'
-        });
-
-    } catch (error) {
-        console.error('Password change error:', error);
-        res.status(500).json({
-            error: 'Internal server error',
-            message: 'Password change failed due to server error'
-        });
-    }
-});
-
-// Logout (client-side token removal)
-router.post('/logout', authenticateToken, async (req, res) => {
-    try {
-        // In a stateless JWT system, logout is handled client-side
-        // by removing the token from storage
-        res.json({
-            message: 'Logout successful'
-        });
-    } catch (error) {
-        console.error('Logout error:', error);
-        res.status(500).json({
-            error: 'Internal server error',
-            message: 'Logout failed due to server error'
         });
     }
 });

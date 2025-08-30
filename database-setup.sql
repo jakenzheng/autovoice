@@ -1,20 +1,17 @@
 -- AutoVoice Database Setup for Supabase
 -- Copy and paste this entire file into your Supabase SQL Editor
 
--- Create users table
+-- Create users table (compatible with Supabase Auth)
 CREATE TABLE IF NOT EXISTS users (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email VARCHAR UNIQUE NOT NULL,
-    password_hash VARCHAR NOT NULL,
     first_name VARCHAR,
     last_name VARCHAR,
     business_name VARCHAR,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_login TIMESTAMP WITH TIME ZONE,
     is_active BOOLEAN DEFAULT TRUE,
-    email_verified BOOLEAN DEFAULT FALSE,
-    reset_token VARCHAR,
-    reset_token_expiry TIMESTAMP WITH TIME ZONE
+    email_verified BOOLEAN DEFAULT FALSE
 );
 
 -- Create batches table

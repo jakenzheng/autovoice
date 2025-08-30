@@ -2,7 +2,7 @@
 
 // Global authentication state
 let currentUser = null;
-let authToken = localStorage.getItem('authToken');
+let authToken = localStorage.getItem('supabase.auth.token');
 
 class InvoiceClassifier {
     constructor() {
@@ -405,25 +405,19 @@ class InvoiceClassifier {
 
     // Authentication methods
     async checkAuthStatus() {
-        if (authToken) {
-            try {
-                const response = await fetch('/api/auth/me', {
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    currentUser = data.user;
-                    this.updateAuthUI();
-                } else {
-                    this.logout();
-                }
-            } catch (error) {
-                console.error('Auth check error:', error);
+        try {
+            const response = await fetch('/api/auth/me');
+            
+            if (response.ok) {
+                const data = await response.json();
+                currentUser = data.user;
+                this.updateAuthUI();
+            } else {
                 this.logout();
             }
+        } catch (error) {
+            console.error('Auth check error:', error);
+            this.logout();
         }
     }
 
@@ -445,7 +439,7 @@ class InvoiceClassifier {
     logout() {
         currentUser = null;
         authToken = null;
-        localStorage.removeItem('authToken');
+        localStorage.removeItem('supabase.auth.token');
         this.updateAuthUI();
         this.showToast('Logged out successfully', 'success');
     }
@@ -472,7 +466,7 @@ async function handleLogin(event) {
     const password = document.getElementById('loginPassword').value;
     
     try {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch('/api/auth/signin', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -483,9 +477,11 @@ async function handleLogin(event) {
         const data = await response.json();
         
         if (response.ok) {
-            authToken = data.tokens.accessToken;
             currentUser = data.user;
-            localStorage.setItem('authToken', authToken);
+            // Store the session token
+            if (data.session) {
+                localStorage.setItem('supabase.auth.token', data.session.access_token);
+            }
             
             window.invoiceClassifier.updateAuthUI();
             closeLoginModal();
@@ -509,7 +505,7 @@ async function handleRegister(event) {
     const password = document.getElementById('registerPassword').value;
     
     try {
-        const response = await fetch('/api/auth/register', {
+        const response = await fetch('/api/auth/signup', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -526,13 +522,10 @@ async function handleRegister(event) {
         const data = await response.json();
         
         if (response.ok) {
-            authToken = data.tokens.accessToken;
             currentUser = data.user;
-            localStorage.setItem('authToken', authToken);
-            
             window.invoiceClassifier.updateAuthUI();
             closeRegisterModal();
-            window.invoiceClassifier.showToast('Registration successful', 'success');
+            window.invoiceClassifier.showToast('Registration successful! Please check your email to verify your account.', 'success');
         } else {
             window.invoiceClassifier.showToast(data.message || 'Registration failed', 'error');
         }
@@ -644,8 +637,21 @@ function showProfile() {
     window.invoiceClassifier.showToast('Profile management coming soon', 'info');
 }
 
-function logout() {
-    window.invoiceClassifier.logout();
+async function logout() {
+    try {
+        const response = await fetch('/api/auth/signout', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            window.invoiceClassifier.logout();
+        } else {
+            window.invoiceClassifier.showToast('Logout failed', 'error');
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+        window.invoiceClassifier.logout();
+    }
 }
 
 // Initialize the application when DOM is loaded
