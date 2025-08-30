@@ -121,3 +121,4 @@ Thumbs.db
 build/
 dist/
 .vercel
+.env*.local

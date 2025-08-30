@@ -26,6 +26,19 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
 
+// Bypass Vercel deployment protection
+app.use((req, res, next) => {
+    const bypassToken = req.query['x-vercel-protection-bypass'];
+    if (bypassToken) {
+        res.cookie('x-vercel-protection-bypass', bypassToken, { 
+            httpOnly: true, 
+            secure: true, 
+            sameSite: 'lax' 
+        });
+    }
+    next();
+});
+
 // Supabase configuration (optional - will work without it)
 let supabase = null;
 try {
