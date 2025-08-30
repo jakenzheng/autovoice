@@ -117,22 +117,29 @@ router.post('/signin', apiRateLimit, async (req, res) => {
             });
         }
 
-        // Get user profile
-        const { data: user, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
+        // Get user profile (if users table exists)
+        let user = null;
+        try {
+            const { data: userData, error: profileError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', authData.user.id)
+                .single();
 
-        if (profileError) {
-            console.error('Profile fetch error:', profileError);
+            if (profileError) {
+                console.error('Profile fetch error:', profileError);
+            } else {
+                user = userData;
+                
+                // Update last login
+                await supabase
+                    .from('users')
+                    .update({ last_login: new Date().toISOString() })
+                    .eq('id', authData.user.id);
+            }
+        } catch (error) {
+            console.log('Users table not available, using auth user data');
         }
-
-        // Update last login
-        await supabase
-            .from('users')
-            .update({ last_login: new Date().toISOString() })
-            .eq('id', authData.user.id);
 
         res.json({
             message: 'Login successful',
@@ -203,24 +210,31 @@ router.get('/me', async (req, res) => {
             });
         }
 
-        // Get user profile
-        const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+        // Get user profile (if users table exists)
+        let profile = null;
+        try {
+            const { data: profileData, error: profileError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
 
-        if (profileError) {
-            console.error('Profile fetch error:', profileError);
+            if (profileError) {
+                console.error('Profile fetch error:', profileError);
+            } else {
+                profile = profileData;
+            }
+        } catch (error) {
+            console.log('Users table not available, using auth user data');
         }
 
         res.json({
             user: {
                 id: user.id,
                 email: user.email,
-                firstName: profile?.first_name || user.user_metadata?.first_name,
-                lastName: profile?.last_name || user.user_metadata?.last_name,
-                businessName: profile?.business_name
+                firstName: profile?.first_name || user.user_metadata?.first_name || 'User',
+                lastName: profile?.last_name || user.user_metadata?.last_name || '',
+                businessName: profile?.business_name || user.user_metadata?.business_name
             }
         });
 

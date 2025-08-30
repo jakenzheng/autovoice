@@ -6,6 +6,10 @@ const fs = require('fs');
 const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const helmet = require('helmet');
+const sharp = require('sharp');
+const moment = require('moment');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 // Import authentication and data persistence modules
@@ -13,9 +17,20 @@ const authRoutes = require('./routes/auth');
 const batchRoutes = require('./routes/batches');
 const invoiceRoutes = require('./routes/invoices');
 const analyticsRoutes = require('./routes/analytics');
+const fileRoutes = require('./routes/files');
+const exportRoutes = require('./routes/exports');
 const { supabase } = require('./supabase-config');
 
 const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production' 
+      ? ['https://invoice-classifier-kqz3uci7u-jakenzhengs-projects.vercel.app']
+      : true,
+    credentials: true
+  }
+});
 const PORT = process.env.PORT || 3000;
 
 // Security middleware - COMPLETELY REMOVED to fix CSP issues
@@ -30,6 +45,11 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
+
+// Serve Socket.io client library
+app.get('/socket.io/socket.io.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'node_modules', 'socket.io', 'client-dist', 'socket.io.js'));
+});
 
 // OpenAI configuration
 const openai = new OpenAI({
@@ -241,10 +261,16 @@ app.use('/api/auth', authRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/exports', exportRoutes);
 
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/test', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'test.html'));
 });
 
 // Note: File viewing is disabled in Vercel deployment due to memory storage
@@ -282,12 +308,10 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
             status: 'processing',
             total_invoices: req.files.length,
             processed_invoices: 0,
-            summary: {
-              totalParts: 0,
-              totalLabor: 0,
-              totalTax: 0,
-              flaggedCount: 0
-            }
+            total_parts: 0,
+            total_labor: 0,
+            total_tax: 0,
+            flagged_count: 0
           })
           .select('id')
           .single();
@@ -314,7 +338,19 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       const file = req.files[i];
       console.log(`Processing file ${i + 1}/${req.files.length}: ${file.originalname}`);
       
-      const result = await processInvoice(file.buffer, file.originalname);
+      // Emit real-time progress update
+      if (batchId) {
+        io.to(`batch-${batchId}`).emit('processing-progress', {
+          current: i + 1,
+          total: req.files.length,
+          filename: file.originalname,
+          percentage: Math.round(((i + 1) / req.files.length) * 100)
+        });
+      }
+      
+      // Optimize image before processing
+      const optimizedBuffer = await optimizeImage(file.buffer);
+      const result = await processInvoice(optimizedBuffer, file.originalname);
       
       if (result.success) {
         const data = result.data;
@@ -338,11 +374,15 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
           flaggedCount++;
         }
 
-        // Save invoice to database if user is authenticated
+        // Generate thumbnail and save invoice to database if user is authenticated
         if (userId && batchId) {
           try {
+            // Generate thumbnail
+            const thumbnailBuffer = await generateThumbnail(file.buffer, file.originalname);
+            const thumbnailBase64 = thumbnailBuffer ? thumbnailBuffer.toString('base64') : null;
+            
             await supabase
-              .from('invoices')
+              .from('files')
               .insert({
                 batch_id: batchId,
                 user_id: userId,
@@ -350,14 +390,12 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                 file_size: file.size,
                 mime_type: file.mimetype,
                 image_url: null, // Will be updated when file storage is implemented
-                thumbnail_url: null,
-                extracted_data: {
-                  parts: data.parts,
-                  labor: data.labor,
-                  tax: data.tax,
-                  flagged: data.flagged,
-                  confidence: data.confidence
-                },
+                thumbnail_url: thumbnailBase64 ? `data:image/jpeg;base64,${thumbnailBase64}` : null,
+                extracted_parts: parseFloat(data.parts) || 0,
+                extracted_labor: parseFloat(data.labor) || 0,
+                extracted_tax: typeof data.tax === 'number' ? data.tax : 0,
+                is_flagged: data.flagged || false,
+                confidence_level: data.confidence || 'medium',
                 processing_metadata: {
                   processedAt: new Date().toISOString(),
                   aiModel: 'gpt-4o',
@@ -395,7 +433,10 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
           .update({
             status: 'completed',
             processed_invoices: results.length,
-            summary: summary,
+            total_parts: parseFloat(totalParts.toFixed(2)),
+            total_labor: parseFloat(totalLabor.toFixed(2)),
+            total_tax: parseFloat(totalTax.toFixed(2)),
+            flagged_count: flaggedCount,
             completed_at: new Date().toISOString()
           })
           .eq('id', batchId);
@@ -414,6 +455,15 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
     };
 
     console.log('Processing complete. Summary:', summary);
+    
+    // Emit completion notification
+    if (batchId) {
+      io.to(`batch-${batchId}`).emit('processing-complete', {
+        summary,
+        batchId,
+        completedAt: new Date().toISOString()
+      });
+    }
     
     // Check if quota was exceeded
     const quotaExceededCount = results.filter(r => r.quotaExceeded).length;
@@ -444,8 +494,57 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: error.message });
 });
 
-app.listen(PORT, () => {
+// Socket.io event handlers
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
+  socket.on('join-batch', (batchId) => {
+    socket.join(`batch-${batchId}`);
+    console.log(`Client ${socket.id} joined batch ${batchId}`);
+  });
+  
+  socket.on('test', (data) => {
+    console.log('Test message received:', data);
+    socket.emit('test-response', { message: 'Test message received successfully!' });
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Image processing utility functions
+async function generateThumbnail(imageBuffer, filename) {
+  try {
+    const thumbnail = await sharp(imageBuffer)
+      .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+    
+    return thumbnail;
+  } catch (error) {
+    console.error('Thumbnail generation error:', error);
+    return null;
+  }
+}
+
+async function optimizeImage(imageBuffer) {
+  try {
+    const optimized = await sharp(imageBuffer)
+      .jpeg({ quality: 85, progressive: true })
+      .toBuffer();
+    
+    return optimized;
+  } catch (error) {
+    console.error('Image optimization error:', error);
+    return imageBuffer; // Return original if optimization fails
+  }
+}
+
+// Start server with Socket.io
+server.listen(PORT, () => {
   console.log(`🚗 Invoice Classifier running on http://localhost:${PORT}`);
   console.log(`✨ Luxury automotive invoice processing ready with OpenAI GPT-4 Vision`);
   console.log(`📊 Processing up to 50 invoices per batch`);
+  console.log(`🔌 Socket.io real-time updates enabled`);
 });

@@ -23,21 +23,39 @@ const authenticateToken = async (req, res, next) => {
             });
         }
 
-        // Get user profile from our users table
-        const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('id, email, first_name, last_name, business_name, is_active')
-            .eq('id', user.id)
-            .single();
+        // Get user profile from our users table (if it exists)
+        try {
+            const { data: profile, error: profileError } = await supabase
+                .from('users')
+                .select('id, email, first_name, last_name, business_name, is_active')
+                .eq('id', user.id)
+                .single();
 
-        if (profileError || !profile || !profile.is_active) {
-            return res.status(401).json({ 
-                error: 'Invalid token',
-                message: 'User not found or account inactive'
-            });
+            if (profile && !profile.is_active) {
+                return res.status(401).json({ 
+                    error: 'Account inactive',
+                    message: 'Your account has been deactivated'
+                });
+            }
+
+            req.user = profile || {
+                id: user.id,
+                email: user.email,
+                first_name: user.user_metadata?.first_name || 'User',
+                last_name: user.user_metadata?.last_name || '',
+                business_name: user.user_metadata?.business_name || null
+            };
+        } catch (error) {
+            // If users table doesn't exist, use auth user data
+            console.log('Users table not available, using auth user data');
+            req.user = {
+                id: user.id,
+                email: user.email,
+                first_name: user.user_metadata?.first_name || 'User',
+                last_name: user.user_metadata?.last_name || '',
+                business_name: user.user_metadata?.business_name || null
+            };
         }
-
-        req.user = profile;
         next();
     } catch (error) {
         console.error('Auth middleware error:', error);

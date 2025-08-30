@@ -4,16 +4,260 @@
 let currentUser = null;
 let authToken = localStorage.getItem('supabase.auth.token');
 
+// Socket.io connection
+let socket = null;
+
+// Chart.js instances
+let partsLaborChart = null;
+
 class InvoiceClassifier {
     constructor() {
         this.selectedFiles = [];
         this.results = [];
+        this.currentBatchId = null;
         // Don't call init() here - it will be called after DOM is loaded
     }
 
     init() {
         this.setupEventListeners();
         this.setupDragAndDrop();
+        this.initializeSocket();
+        this.initializeCharts();
+    }
+
+    initializeSocket() {
+        try {
+            socket = io();
+            
+            socket.on('connect', () => {
+                console.log('Connected to server via Socket.io');
+            });
+            
+            socket.on('processing-progress', (data) => {
+                this.updateProcessingProgress(data);
+            });
+            
+            socket.on('processing-complete', (data) => {
+                this.handleProcessingComplete(data);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+            });
+        } catch (error) {
+            console.error('Socket.io initialization error:', error);
+        }
+    }
+
+    initializeCharts() {
+        try {
+            // Initialize only the parts vs labor pie chart
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: {
+                                family: 'Inter, sans-serif',
+                                size: 12
+                            },
+                            color: '#1a1a1a'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return `${label}: $${value.toFixed(2)} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            };
+            
+            // Parts vs Labor Chart
+            const partsLaborCtx = document.getElementById('partsLaborChart');
+            if (partsLaborCtx) {
+                partsLaborChart = new Chart(partsLaborCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Parts', 'Labor'],
+                        datasets: [{
+                            data: [0, 0],
+                            backgroundColor: ['rgba(0, 123, 255, 0.8)', 'rgba(220, 53, 69, 0.8)'], // Blue for parts, Red for labor
+                            borderColor: ['rgba(0, 123, 255, 1)', 'rgba(220, 53, 69, 1)'], // Blue border for parts, Red border for labor
+                            borderWidth: 2
+                        }]
+                    },
+                    options: chartOptions
+                });
+            }
+        } catch (error) {
+            console.error('Chart.js initialization error:', error);
+        }
+    }
+
+    updateProcessingProgress(data) {
+        const processingStatus = document.getElementById('processingStatus');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const currentFile = document.getElementById('currentFile');
+        const statusText = document.getElementById('statusText');
+        
+        if (processingStatus && progressFill && progressText && currentFile && statusText) {
+            processingStatus.style.display = 'block';
+            progressFill.style.width = `${data.percentage}%`;
+            progressText.textContent = `${data.current} / ${data.total} files processed`;
+            currentFile.textContent = data.filename;
+            statusText.textContent = `Processing ${data.filename}...`;
+        }
+    }
+
+    handleProcessingComplete(data) {
+        const processingStatus = document.getElementById('processingStatus');
+        const statusText = document.getElementById('statusText');
+        const spinner = document.querySelector('.spinner');
+        
+        if (processingStatus && statusText && spinner) {
+            statusText.textContent = 'Processing complete!';
+            spinner.style.display = 'none';
+            
+            setTimeout(() => {
+                processingStatus.style.display = 'none';
+            }, 3000);
+            
+            // Update analytics if available
+            if (data.summary) {
+                this.updateAnalytics(data.summary);
+            }
+        }
+    }
+
+    updateAnalytics(summary) {
+        // Update summary cards with real-time data
+        const totalParts = document.getElementById('totalParts');
+        const totalLabor = document.getElementById('totalLabor');
+        const totalTax = document.getElementById('totalTax');
+        const processedCount = document.getElementById('processedCount');
+        const flaggedCount = document.getElementById('flaggedCount');
+        
+        if (totalParts) totalParts.textContent = `$${summary.totalParts.toFixed(2)}`;
+        if (totalLabor) totalLabor.textContent = `$${summary.totalLabor.toFixed(2)}`;
+        if (totalTax) totalTax.textContent = `$${summary.totalTax.toFixed(2)}`;
+        if (processedCount) processedCount.textContent = summary.processedCount;
+        if (flaggedCount) flaggedCount.textContent = `${summary.flaggedCount} flagged`;
+        
+        // Update pie chart if analytics section is visible
+        const analyticsSection = document.getElementById('analyticsSection');
+        if (analyticsSection && analyticsSection.style.display !== 'none' && partsLaborChart) {
+            // Get current chart data and add new values
+            const currentData = partsLaborChart.data.datasets[0].data;
+            const newParts = currentData[0] + summary.totalParts;
+            const newLabor = currentData[1] + summary.totalLabor;
+            
+            partsLaborChart.data.datasets[0].data = [newParts, newLabor];
+            partsLaborChart.update();
+        }
+    }
+
+    updateField(index, field, value) {
+        if (index >= 0 && index < this.results.length) {
+            const result = this.results[index];
+            const numValue = parseFloat(value) || 0;
+            
+            // Update the result
+            result[field] = numValue;
+            
+            // Update summary totals
+            this.updateSummaryTotals();
+            
+            // Update the pie chart if analytics is visible
+            this.updatePieChartFromCurrentResults();
+            
+            this.showToast(`${field.charAt(0).toUpperCase() + field.slice(1)} updated to $${numValue.toFixed(2)}`, 'success');
+        }
+    }
+
+    updateSummaryTotals() {
+        let totalParts = 0;
+        let totalLabor = 0;
+        let totalTax = 0;
+        let flaggedCount = 0;
+        
+        this.results.forEach(result => {
+            totalParts += parseFloat(result.parts) || 0;
+            totalLabor += parseFloat(result.labor) || 0;
+            totalTax += parseFloat(result.tax) || 0;
+            if (result.flagged) flaggedCount++;
+        });
+        
+        // Update summary cards
+        const totalPartsEl = document.getElementById('totalParts');
+        const totalLaborEl = document.getElementById('totalLabor');
+        const totalTaxEl = document.getElementById('totalTax');
+        const processedCountEl = document.getElementById('processedCount');
+        const flaggedCountEl = document.getElementById('flaggedCount');
+        
+        if (totalPartsEl) totalPartsEl.textContent = `$${totalParts.toFixed(2)}`;
+        if (totalLaborEl) totalLaborEl.textContent = `$${totalLabor.toFixed(2)}`;
+        if (totalTaxEl) totalTaxEl.textContent = `$${totalTax.toFixed(2)}`;
+        if (processedCountEl) processedCountEl.textContent = this.results.length;
+        if (flaggedCountEl) flaggedCountEl.textContent = `${flaggedCount} flagged`;
+    }
+
+    updatePieChartFromCurrentResults() {
+        if (!partsLaborChart) return;
+        
+        let totalParts = 0;
+        let totalLabor = 0;
+        
+        this.results.forEach(result => {
+            totalParts += parseFloat(result.parts) || 0;
+            totalLabor += parseFloat(result.labor) || 0;
+        });
+        
+        partsLaborChart.data.datasets[0].data = [totalParts, totalLabor];
+        partsLaborChart.update();
+    }
+
+    filterHistory() {
+        const monthFilter = document.getElementById('monthFilter');
+        const yearFilter = document.getElementById('yearFilter');
+        const tableBody = document.getElementById('historyTableBody');
+        
+        if (!monthFilter || !yearFilter || !tableBody) return;
+        
+        const selectedMonth = monthFilter.value;
+        const selectedYear = yearFilter.value;
+        
+        // Get all batches from the current data
+        const allBatches = this.historyData || [];
+        
+        // Filter batches based on selection
+        const filteredBatches = allBatches.filter(batch => {
+            const date = new Date(batch.created_at);
+            const batchMonth = date.toLocaleDateString('en-US', { month: 'long' });
+            const batchYear = date.getFullYear().toString();
+            
+            const monthMatch = !selectedMonth || batchMonth === selectedMonth;
+            const yearMatch = !selectedYear || batchYear === selectedYear;
+            
+            return monthMatch && yearMatch;
+        });
+        
+        // Update the table with filtered data
+        displayHistoryTable(filteredBatches);
+        updateHistoryStats(filteredBatches);
+    }
+
+    viewBatchDetails(batchId) {
+        // TODO: Implement batch details view
+        this.showToast('Batch details view coming soon', 'info');
     }
 
     setupEventListeners() {
@@ -199,6 +443,14 @@ class InvoiceClassifier {
             this.updateProgress(10);
             this.updateProcessingStatus('Preparing files...');
 
+            // Add batch information if user is authenticated
+            if (currentUser) {
+                const batchName = document.getElementById('batchName')?.value || `Batch ${new Date().toLocaleDateString()}`;
+                const description = document.getElementById('batchDescription')?.value || '';
+                formData.append('batchName', batchName);
+                formData.append('description', description);
+            }
+
             const response = await fetch('/upload', {
                 method: 'POST',
                 body: formData
@@ -221,6 +473,13 @@ class InvoiceClassifier {
 
             if (result.success) {
                 this.results = result.results;
+                this.currentBatchId = result.batchId;
+                
+                // Join Socket.io room for real-time updates if batch ID exists
+                if (result.batchId && socket) {
+                    socket.emit('join-batch', result.batchId);
+                }
+                
                 this.displayResults(result.summary);
                 this.updateProgress(100);
                 this.updateProcessingStatus('Complete!');
@@ -287,18 +546,32 @@ class InvoiceClassifier {
 
             row.innerHTML = `
                 <td>${filenameCell}</td>
-                <td>${this.formatCurrency(result.parts || 0)}</td>
-                <td>${this.formatCurrency(result.labor || 0)}</td>
-                <td>${typeof result.tax === 'string' ? result.tax : this.formatCurrency(result.tax || 0)}</td>
+                <td>
+                    <input type="number" class="editable-field" data-field="parts" data-index="${index}" 
+                           value="${result.parts || 0}" step="0.01" min="0" 
+                           onchange="window.invoiceClassifier.updateField(${index}, 'parts', this.value)">
+                </td>
+                <td>
+                    <input type="number" class="editable-field" data-field="labor" data-index="${index}" 
+                           value="${result.labor || 0}" step="0.01" min="0" 
+                           onchange="window.invoiceClassifier.updateField(${index}, 'labor', this.value)">
+                </td>
+                <td>
+                    <input type="number" class="editable-field" data-field="tax" data-index="${index}" 
+                           value="${typeof result.tax === 'number' ? result.tax : 0}" step="0.01" min="0" 
+                           onchange="window.invoiceClassifier.updateField(${index}, 'tax', this.value)">
+                </td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
-                <td><button class="view-btn" onclick="window.invoiceClassifier.showImageModal('${result.filename}', ${index})">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path d="M8 2C11.3137 2 14 4.68629 14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                        <path d="M8 5C6.34315 5 5 6.34315 5 8C5 9.65685 6.34315 11 8 11C9.65685 11 11 9.65685 11 8C11 6.34315 9.65685 5 8 5Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                        <path d="M8 6.5C7.17157 6.5 6.5 7.17157 6.5 8C6.5 8.82843 7.17157 9.5 8 9.5C8.82843 9.5 9.5 8.82843 9.5 8C9.5 7.17157 8.82843 6.5 8 6.5Z" fill="currentColor"/>
-                    </svg>
-                </button></td>
+                <td>
+                    <button class="view-btn" onclick="window.invoiceClassifier.showImageModal('${result.filename}', ${index})">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 2C11.3137 2 14 4.68629 14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            <path d="M8 5C6.34315 5 5 6.34315 5 8C5 9.65685 6.34315 11 8 11C9.65685 11 11 9.65685 11 8C11 6.34315 9.65685 5 8 5Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            <path d="M8 6.5C7.17157 6.5 6.5 7.17157 6.5 8C6.5 8.82843 7.17157 9.5 8 9.5C8.82843 9.5 9.5 8.82843 9.5 8C9.5 7.17157 8.82843 6.5 8 6.5Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        </svg>
+                    </button>
+                </td>
             `;
             
             tableBody.appendChild(row);
@@ -324,9 +597,25 @@ class InvoiceClassifier {
     resetApp() {
         this.selectedFiles = [];
         this.results = [];
-        document.getElementById('singleFileInput').value = '';
-        document.getElementById('multipleFileInput').value = '';
-        document.getElementById('filePreview').style.display = 'none';
+        
+        // Reset file input if it exists
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        
+        // Hide file preview if it exists
+        const filePreview = document.getElementById('filePreview');
+        if (filePreview) {
+            filePreview.style.display = 'none';
+        }
+        
+        // Clear file list if it exists
+        const fileList = document.getElementById('fileList');
+        if (fileList) {
+            fileList.innerHTML = '';
+        }
+        
         this.showUploadSection();
         this.showToast('Ready for new batch', 'success');
     }
@@ -375,22 +664,43 @@ class InvoiceClassifier {
         const modalImage = document.getElementById('modalImage');
         const modalTitle = document.getElementById('modalTitle');
         
-        // Note: File viewing is disabled in Vercel deployment
+        // Get result data for this file
+        const result = this.results[index];
+        
         modalTitle.textContent = filename;
-        modalImage.src = ''; // No image available in Vercel deployment
         modal.classList.add('show');
         
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
         
-        // Show a message that file viewing is not available
-        modalImage.alt = 'File viewing not available in Vercel deployment';
-        modalImage.style.display = 'none';
-        const message = document.createElement('p');
-        message.textContent = 'File viewing is not available in this deployment. Files are processed in memory for security.';
-        message.style.textAlign = 'center';
-        message.style.color = 'var(--royal-gray)';
-        modal.querySelector('.modal-content').appendChild(message);
+        // Update modal info
+        if (result) {
+            document.getElementById('modalParts').textContent = this.formatCurrency(result.parts || 0);
+            document.getElementById('modalLabor').textContent = this.formatCurrency(result.labor || 0);
+            document.getElementById('modalTax').textContent = typeof result.tax === 'string' ? result.tax : this.formatCurrency(result.tax || 0);
+            document.getElementById('modalStatus').textContent = result.flagged ? 'Flagged' : 'Success';
+            document.getElementById('modalConfidence').textContent = result.confidence || 'Medium';
+            
+            // Set status color
+            const statusElement = document.getElementById('modalStatus');
+            statusElement.className = result.flagged ? 'status-flagged' : 'status-success';
+        }
+        
+        // Try to show thumbnail if available
+        if (result && result.thumbnail_url) {
+            modalImage.src = result.thumbnail_url;
+            modalImage.style.display = 'block';
+        } else {
+            // Show placeholder for Vercel deployment
+            modalImage.src = '';
+            modalImage.style.display = 'none';
+            const message = document.createElement('p');
+            message.textContent = 'Thumbnail not available in this deployment. Files are processed in memory for security.';
+            message.style.textAlign = 'center';
+            message.style.color = 'var(--royal-gray)';
+            message.style.padding = 'var(--space-4)';
+            modal.querySelector('.modal-body').insertBefore(message, modal.querySelector('.image-info'));
+        }
     }
 
     closeImageModal() {
@@ -428,9 +738,12 @@ class InvoiceClassifier {
             const sessionToken = localStorage.getItem('supabase.auth.token');
             
             if (!sessionToken) {
+                console.log('No session token found, logging out');
                 this.logout();
                 return;
             }
+
+            console.log('Checking auth status with token:', sessionToken.substring(0, 20) + '...');
 
             const response = await fetch('/api/auth/me', {
                 headers: {
@@ -441,8 +754,11 @@ class InvoiceClassifier {
             if (response.ok) {
                 const data = await response.json();
                 currentUser = data.user;
+                authToken = sessionToken; // Ensure authToken is set
+                console.log('Auth check successful, user:', currentUser);
                 this.updateAuthUI();
             } else {
+                console.log('Auth check failed:', response.status, response.statusText);
                 this.logout();
             }
         } catch (error) {
@@ -454,21 +770,28 @@ class InvoiceClassifier {
     updateAuthUI() {
         const authButtons = document.getElementById('authButtons');
         const userMenu = document.getElementById('userMenu');
+        const navMenu = document.getElementById('navMenu');
         const userName = document.getElementById('userName');
         const welcomeSection = document.getElementById('welcomeSection');
         const mainContent = document.getElementById('mainContent');
 
+        console.log('updateAuthUI called, currentUser:', currentUser);
+
         if (currentUser) {
             // User is authenticated - show main content, hide welcome
+            console.log('User authenticated, showing main content');
             authButtons.style.display = 'none';
             userMenu.style.display = 'flex';
+            if (navMenu) navMenu.style.display = 'flex';
             userName.textContent = `${currentUser.firstName} ${currentUser.lastName}`;
             welcomeSection.style.display = 'none';
             mainContent.style.display = 'block';
         } else {
             // User is not authenticated - show welcome, hide main content
+            console.log('User not authenticated, showing welcome section');
             authButtons.style.display = 'flex';
             userMenu.style.display = 'none';
+            if (navMenu) navMenu.style.display = 'none';
             welcomeSection.style.display = 'block';
             mainContent.style.display = 'none';
         }
@@ -520,11 +843,13 @@ async function handleLogin(event) {
             // Store the session token
             if (data.session) {
                 localStorage.setItem('supabase.auth.token', data.session.access_token);
+                authToken = data.session.access_token;
                 if (data.session.refresh_token) {
                     localStorage.setItem('supabase.auth.refreshToken', data.session.refresh_token);
                 }
             }
             
+            console.log('Login successful, user:', currentUser);
             window.invoiceClassifier.updateAuthUI();
             closeLoginModal();
             window.invoiceClassifier.showToast('Login successful! Welcome back.', 'success');
@@ -669,15 +994,43 @@ function displayBatches(batches) {
         return;
     }
     
-    batchesList.innerHTML = batches.map(batch => `
-        <div class="batch-item">
-            <h4>${batch.batch_name}</h4>
-            <p>Status: ${batch.status}</p>
-            <p>Invoices: ${batch.total_invoices}</p>
-            <p>Created: ${new Date(batch.created_at).toLocaleDateString()}</p>
-        </div>
-    `).join('');
+    batchesList.innerHTML = batches.map(batch => {
+        const createdDate = new Date(batch.created_at).toLocaleDateString();
+        const completedDate = batch.completed_at ? new Date(batch.completed_at).toLocaleDateString() : 'In Progress';
+        
+        return `
+            <div class="batch-item">
+                <h5>${batch.batch_name}</h5>
+                <p>Status: ${batch.status}</p>
+                <p>Created: ${createdDate}</p>
+                ${batch.completed_at ? `<p>Completed: ${completedDate}</p>` : ''}
+                <div class="batch-stats">
+                    <span class="batch-stat">Invoices: ${batch.processed_invoices || 0}</span>
+                    <span class="batch-stat">Parts: $${(batch.total_parts || 0).toFixed(2)}</span>
+                    <span class="batch-stat">Labor: $${(batch.total_labor || 0).toFixed(2)}</span>
+                    <span class="batch-stat">Tax: $${(batch.total_tax || 0).toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
+
+function updatePieChartFromBatches(batches) {
+        if (!partsLaborChart) return;
+        
+        let totalParts = 0;
+        let totalLabor = 0;
+        
+        // Calculate totals from all batches using the new schema
+        batches.forEach(batch => {
+            totalParts += batch.total_parts || 0;
+            totalLabor += batch.total_labor || 0;
+        });
+        
+        // Update chart data
+        partsLaborChart.data.datasets[0].data = [totalParts, totalLabor];
+        partsLaborChart.update();
+    }
 
 function showProfile() {
     // TODO: Implement profile management
@@ -709,3 +1062,375 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check authentication status on page load
     window.invoiceClassifier.checkAuthStatus();
 });
+
+// Analytics functions
+function showUploadSection() {
+    const uploadSection = document.getElementById('uploadSection');
+    const analyticsSection = document.getElementById('analyticsSection');
+    const historySection = document.getElementById('historySection');
+    
+    if (uploadSection) {
+        uploadSection.style.display = 'block';
+        if (analyticsSection) analyticsSection.style.display = 'none';
+        if (historySection) historySection.style.display = 'none';
+    }
+    
+    // Update navigation active state
+    updateNavigationActive('showUploadSection');
+}
+
+function showAnalytics() {
+    const analyticsSection = document.getElementById('analyticsSection');
+    const historySection = document.getElementById('historySection');
+    const uploadSection = document.getElementById('uploadSection');
+    
+    if (analyticsSection) {
+        analyticsSection.style.display = 'block';
+        if (historySection) historySection.style.display = 'none';
+        if (uploadSection) uploadSection.style.display = 'none';
+        loadAnalyticsData();
+    }
+    
+    // Update navigation active state
+    updateNavigationActive('showAnalytics');
+}
+
+function showHistory() {
+    const analyticsSection = document.getElementById('analyticsSection');
+    const historySection = document.getElementById('historySection');
+    const uploadSection = document.getElementById('uploadSection');
+    
+    if (historySection) {
+        historySection.style.display = 'block';
+        if (analyticsSection) analyticsSection.style.display = 'none';
+        if (uploadSection) uploadSection.style.display = 'none';
+        loadHistoryData();
+    }
+    
+    // Update navigation active state
+    updateNavigationActive('showHistory');
+}
+
+function updateNavigationActive(activePage) {
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    const activeLink = document.querySelector(`[onclick*="${activePage}"]`);
+    if (activeLink) {
+        activeLink.classList.add('active');
+    }
+}
+
+async function exportAllBatches() {
+    if (!currentUser) {
+        window.invoiceClassifier.showToast('Please log in to export data', 'warning');
+        return;
+    }
+    
+    try {
+        window.invoiceClassifier.showToast('Preparing export...', 'info');
+        
+        // Create a download link for CSV export
+        const response = await fetch('/api/exports/batches?format=csv', {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `batches_export_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            window.invoiceClassifier.showToast('Export completed successfully!', 'success');
+        } else {
+            const errorData = await response.json();
+            window.invoiceClassifier.showToast(errorData.message || 'Export failed', 'error');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        window.invoiceClassifier.showToast('Export failed', 'error');
+    }
+}
+
+async function loadAnalyticsData() {
+    if (!currentUser) {
+        console.log('No current user, skipping analytics load');
+        return;
+    }
+    
+    if (!authToken) {
+        console.log('No auth token, attempting to refresh authentication');
+        await window.invoiceClassifier.checkAuthStatus();
+        return;
+    }
+    
+    try {
+        console.log('Loading analytics data with token:', authToken.substring(0, 20) + '...');
+        
+        // Load batches data
+        const batchesResponse = await fetch('/api/batches', {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (batchesResponse.ok) {
+            const batchesData = await batchesResponse.json();
+            displayBatches(batchesData.batches);
+            updatePieChartFromBatches(batchesData.batches);
+        } else {
+            console.error('Analytics load failed:', batchesResponse.status, batchesResponse.statusText);
+            if (batchesResponse.status === 401) {
+                console.log('Authentication failed, attempting to refresh');
+                await window.invoiceClassifier.checkAuthStatus();
+            }
+        }
+        
+    } catch (error) {
+        console.error('Analytics load error:', error);
+    }
+}
+
+async function loadHistoryData() {
+    if (!currentUser) {
+        console.log('No current user, skipping history load');
+        return;
+    }
+    
+    if (!authToken) {
+        console.log('No auth token, attempting to refresh authentication');
+        await window.invoiceClassifier.checkAuthStatus();
+        return;
+    }
+    
+    try {
+        console.log('Loading history data with token:', authToken.substring(0, 20) + '...');
+        
+        const response = await fetch('/api/batches', {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            // Store data for filtering
+            window.invoiceClassifier.historyData = data.batches;
+            displayHistoryTable(data.batches);
+            updateHistoryStats(data.batches);
+            populateHistoryFilters(data.batches);
+            createMonthlyBreakdown(data.batches);
+        } else {
+            console.error('History load failed:', response.status, response.statusText);
+            if (response.status === 401) {
+                console.log('Authentication failed, attempting to refresh');
+                await window.invoiceClassifier.checkAuthStatus();
+            }
+        }
+    } catch (error) {
+        console.error('Error loading history data:', error);
+    }
+}
+
+function displayHistoryTable(batches) {
+    const tableBody = document.getElementById('historyTableBody');
+    
+    if (!tableBody) return;
+    
+    if (batches.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No batches found</td></tr>';
+        return;
+    }
+    
+    // Sort batches by creation date (newest first)
+    const sortedBatches = batches.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    tableBody.innerHTML = sortedBatches.map(batch => {
+        const createdDate = new Date(batch.created_at);
+        const formattedDate = createdDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const statusClass = `status-${batch.status}`;
+        
+        return `
+            <tr>
+                <td><strong>${batch.batch_name}</strong></td>
+                <td>${formattedDate}</td>
+                <td><span class="status-badge ${statusClass}">${batch.status}</span></td>
+                <td>${batch.processed_invoices || 0}</td>
+                <td>$${(batch.total_parts || 0).toFixed(2)}</td>
+                <td>$${(batch.total_labor || 0).toFixed(2)}</td>
+                <td>$${(batch.total_tax || 0).toFixed(2)}</td>
+                <td>
+                    <button class="action-btn" onclick="window.invoiceClassifier.viewBatchDetails('${batch.id}')">
+                        View
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateHistoryStats(batches) {
+    const totalBatches = batches.length;
+    const totalFiles = batches.reduce((sum, batch) => sum + (batch.processed_invoices || 0), 0);
+    const totalParts = batches.reduce((sum, batch) => sum + (batch.total_parts || 0), 0);
+    const totalLabor = batches.reduce((sum, batch) => sum + (batch.total_labor || 0), 0);
+    
+    const totalBatchesEl = document.getElementById('totalBatchesCount');
+    const totalFilesEl = document.getElementById('totalFilesCount');
+    const historyTotalPartsEl = document.getElementById('historyTotalParts');
+    const historyTotalLaborEl = document.getElementById('historyTotalLabor');
+    
+    if (totalBatchesEl) totalBatchesEl.textContent = totalBatches;
+    if (totalFilesEl) totalFilesEl.textContent = totalFiles;
+    if (historyTotalPartsEl) historyTotalPartsEl.textContent = `$${totalParts.toFixed(2)}`;
+    if (historyTotalLaborEl) historyTotalLaborEl.textContent = `$${totalLabor.toFixed(2)}`;
+}
+
+function populateHistoryFilters(batches) {
+    const monthFilter = document.getElementById('monthFilter');
+    const yearFilter = document.getElementById('yearFilter');
+    
+    if (!monthFilter || !yearFilter) return;
+    
+    // Get unique months and years
+    const months = new Set();
+    const years = new Set();
+    
+    batches.forEach(batch => {
+        const date = new Date(batch.created_at);
+        const month = date.toLocaleDateString('en-US', { month: 'long' });
+        const year = date.getFullYear().toString();
+        
+        months.add(month);
+        years.add(year);
+    });
+    
+    // Populate month filter
+    monthFilter.innerHTML = '<option value="">All Months</option>';
+    Array.from(months).sort().forEach(month => {
+        monthFilter.innerHTML += `<option value="${month}">${month}</option>`;
+    });
+    
+    // Populate year filter
+    yearFilter.innerHTML = '<option value="">All Years</option>';
+    Array.from(years).sort((a, b) => b - a).forEach(year => {
+        yearFilter.innerHTML += `<option value="${year}">${year}</option>`;
+    });
+}
+
+function createMonthlyBreakdown(batches) {
+    const monthlyBreakdown = document.getElementById('monthlyBreakdown');
+    
+    if (!monthlyBreakdown) return;
+    
+    // Group batches by month
+    const monthlyData = {};
+    
+    batches.forEach(batch => {
+        const date = new Date(batch.created_at);
+        const monthKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        
+        if (!monthlyData[monthKey]) {
+            monthlyData[monthKey] = {
+                batches: 0,
+                files: 0,
+                parts: 0,
+                labor: 0,
+                tax: 0
+            };
+        }
+        
+        monthlyData[monthKey].batches++;
+        monthlyData[monthKey].files += batch.processed_invoices || 0;
+        monthlyData[monthKey].parts += batch.total_parts || 0;
+        monthlyData[monthKey].labor += batch.total_labor || 0;
+        monthlyData[monthKey].tax += batch.total_tax || 0;
+    });
+    
+    // Create monthly charts
+    monthlyBreakdown.innerHTML = Object.entries(monthlyData).map(([month, data]) => {
+        const chartId = `monthlyChart_${month.replace(/\s+/g, '_')}`;
+        
+        return `
+            <div class="monthly-chart-container">
+                <h5>${month}</h5>
+                <canvas id="${chartId}"></canvas>
+                <div class="monthly-stats">
+                    <p><strong>Batches:</strong> ${data.batches}</p>
+                    <p><strong>Files:</strong> ${data.files}</p>
+                    <p><strong>Total:</strong> $${(data.parts + data.labor + data.tax).toFixed(2)}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Initialize charts for each month
+    Object.entries(monthlyData).forEach(([month, data]) => {
+        const chartId = `monthlyChart_${month.replace(/\s+/g, '_')}`;
+        const ctx = document.getElementById(chartId);
+        
+        if (ctx && data.parts + data.labor > 0) {
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Parts', 'Labor'],
+                    datasets: [{
+                        data: [data.parts, data.labor],
+                        backgroundColor: [
+                            'rgba(0, 123, 255, 0.8)', // Blue for parts
+                            'rgba(220, 53, 69, 0.8)'  // Red for labor
+                        ],
+                        borderColor: [
+                            'rgba(0, 123, 255, 1)',
+                            'rgba(220, 53, 69, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'var(--royal-black)',
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: $${value.toFixed(2)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+}
+
+

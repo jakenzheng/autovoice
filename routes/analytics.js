@@ -1,4 +1,5 @@
 const express = require('express');
+const moment = require('moment');
 const { supabase } = require('../supabase-config');
 const { authenticateToken, apiRateLimit } = require('../middleware/auth');
 
@@ -186,10 +187,17 @@ router.get('/trends', async (req, res) => {
         const { period = 'monthly', year } = req.query;
 
         let query = supabase
-            .from('invoices')
+            .from('files')
             .select(`
                 created_at,
-                extracted_data,
+                extracted_parts,
+                extracted_labor,
+                extracted_tax,
+                edited_parts,
+                edited_labor,
+                edited_tax,
+                is_flagged,
+                confidence_level,
                 batches!inner(user_id)
             `)
             .eq('batches.user_id', userId);
@@ -199,7 +207,7 @@ router.get('/trends', async (req, res) => {
                         .lt('created_at', `${parseInt(year) + 1}-01-01`);
         }
 
-        const { data: invoices, error } = await query;
+        const { data: files, error } = await query;
 
         if (error) {
             console.error('Get trends error:', error);
@@ -210,7 +218,7 @@ router.get('/trends', async (req, res) => {
         }
 
         // Process trend data based on period
-        const trends = processTrendData(invoices, period);
+        const trends = processTrendData(files, period);
 
         res.json({ trends });
 
@@ -259,26 +267,24 @@ router.get('/efficiency', async (req, res) => {
     }
 });
 
-// Helper function to process trend data
-function processTrendData(invoices, period) {
+// Helper function to process trend data with Moment.js
+function processTrendData(files, period) {
     const trends = {};
     
-    invoices.forEach(invoice => {
-        const date = new Date(invoice.created_at);
+    files.forEach(file => {
+        const date = moment(file.created_at);
         let key;
         
         switch (period) {
             case 'daily':
-                key = date.toISOString().split('T')[0];
+                key = date.format('YYYY-MM-DD');
                 break;
             case 'weekly':
-                const weekStart = new Date(date);
-                weekStart.setDate(date.getDate() - date.getDay());
-                key = weekStart.toISOString().split('T')[0];
+                key = date.startOf('week').format('YYYY-MM-DD');
                 break;
             case 'monthly':
             default:
-                key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                key = date.format('YYYY-MM');
                 break;
         }
 
@@ -298,31 +304,152 @@ function processTrendData(invoices, period) {
 
         trends[key].totalInvoices++;
         
-        if (invoice.extracted_data) {
-            trends[key].totalParts += invoice.extracted_data.parts || 0;
-            trends[key].totalLabor += invoice.extracted_data.labor || 0;
-            trends[key].totalTax += invoice.extracted_data.tax || 0;
-            
-            if (invoice.extracted_data.flagged) {
-                trends[key].flaggedCount++;
-            }
+        // Use edited values if available, otherwise use extracted values
+        const parts = file.edited_parts !== null ? file.edited_parts : file.extracted_parts;
+        const labor = file.edited_labor !== null ? file.edited_labor : file.extracted_labor;
+        const tax = file.edited_tax !== null ? file.edited_tax : file.extracted_tax;
+        
+        trends[key].totalParts += parts || 0;
+        trends[key].totalLabor += labor || 0;
+        trends[key].totalTax += tax || 0;
+        
+        if (file.is_flagged) {
+            trends[key].flaggedCount++;
+        }
 
-            switch (invoice.extracted_data.confidence) {
-                case 'high':
-                    trends[key].highConfidence++;
-                    break;
-                case 'medium':
-                    trends[key].mediumConfidence++;
-                    break;
-                case 'low':
-                    trends[key].lowConfidence++;
-                    break;
-            }
+        switch (file.confidence_level) {
+            case 'high':
+                trends[key].highConfidence++;
+                break;
+            case 'medium':
+                trends[key].mediumConfidence++;
+                break;
+            case 'low':
+                trends[key].lowConfidence++;
+                break;
         }
     });
 
     // Convert to array and sort by period
     return Object.values(trends).sort((a, b) => a.period.localeCompare(b.period));
 }
+
+// Get monthly analytics with Moment.js
+router.get('/monthly', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { year = moment().year(), month } = req.query;
+
+        let query = supabase
+            .from('files')
+            .select(`
+                created_at,
+                extracted_parts,
+                extracted_labor,
+                extracted_tax,
+                edited_parts,
+                edited_labor,
+                edited_tax,
+                is_flagged,
+                confidence_level,
+                batches!inner(user_id)
+            `)
+            .eq('batches.user_id', userId);
+
+        // Filter by year and month if provided
+        if (year && month) {
+            const startDate = moment(`${year}-${month.padStart(2, '0')}-01`).startOf('month');
+            const endDate = moment(startDate).endOf('month');
+            
+            query = query.gte('created_at', startDate.toISOString())
+                        .lte('created_at', endDate.toISOString());
+        } else if (year) {
+            const startDate = moment(`${year}-01-01`).startOf('year');
+            const endDate = moment(startDate).endOf('year');
+            
+            query = query.gte('created_at', startDate.toISOString())
+                        .lte('created_at', endDate.toISOString());
+        }
+
+        const { data: files, error } = await query;
+
+        if (error) {
+            console.error('Get monthly analytics error:', error);
+            return res.status(500).json({
+                error: 'Database error',
+                message: 'Unable to retrieve monthly analytics'
+            });
+        }
+
+        // Group files by month using Moment.js
+        const monthlyData = {};
+        
+        files.forEach(file => {
+            const monthKey = moment(file.created_at).format('YYYY-MM');
+            
+            if (!monthlyData[monthKey]) {
+                monthlyData[monthKey] = {
+                    month: monthKey,
+                    monthName: moment(file.created_at).format('MMMM YYYY'),
+                    totalInvoices: 0,
+                    totalParts: 0,
+                    totalLabor: 0,
+                    totalTax: 0,
+                    flaggedCount: 0,
+                    averageConfidence: 0,
+                    confidenceCounts: { high: 0, medium: 0, low: 0 }
+                };
+            }
+
+            monthlyData[monthKey].totalInvoices++;
+            
+            // Use edited values if available, otherwise use extracted values
+            const parts = file.edited_parts !== null ? file.edited_parts : file.extracted_parts;
+            const labor = file.edited_labor !== null ? file.edited_labor : file.extracted_labor;
+            const tax = file.edited_tax !== null ? file.edited_tax : file.extracted_tax;
+            
+            monthlyData[monthKey].totalParts += parts || 0;
+            monthlyData[monthKey].totalLabor += labor || 0;
+            monthlyData[monthKey].totalTax += tax || 0;
+            
+            if (file.is_flagged) {
+                monthlyData[monthKey].flaggedCount++;
+            }
+
+            if (file.confidence_level) {
+                monthlyData[monthKey].confidenceCounts[file.confidence_level]++;
+            }
+        });
+
+        // Calculate averages and convert to array
+        const monthlyAnalytics = Object.values(monthlyData).map(data => ({
+            ...data,
+            averageParts: data.totalInvoices > 0 ? (data.totalParts / data.totalInvoices).toFixed(2) : 0,
+            averageLabor: data.totalInvoices > 0 ? (data.totalLabor / data.totalInvoices).toFixed(2) : 0,
+            averageTax: data.totalInvoices > 0 ? (data.totalTax / data.totalInvoices).toFixed(2) : 0,
+            flagRate: data.totalInvoices > 0 ? ((data.flaggedCount / data.totalInvoices) * 100).toFixed(2) : 0
+        }));
+
+        // Sort by month
+        monthlyAnalytics.sort((a, b) => a.month.localeCompare(b.month));
+
+        res.json({ 
+            monthlyAnalytics,
+            summary: {
+                totalMonths: monthlyAnalytics.length,
+                totalInvoices: monthlyAnalytics.reduce((sum, month) => sum + month.totalInvoices, 0),
+                averageMonthlyInvoices: monthlyAnalytics.length > 0 ? 
+                    (monthlyAnalytics.reduce((sum, month) => sum + month.totalInvoices, 0) / monthlyAnalytics.length).toFixed(2) : 0
+            }
+        });
+
+    } catch (error) {
+        console.error('Get monthly analytics error:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: 'Unable to retrieve monthly analytics'
+        });
+    }
+});
 
 module.exports = router;

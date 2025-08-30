@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoVoice - Test Page</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>AutoVoice Test</h1>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="test-container">
+                <h2>Technology Stack Test</h2>
+                
+                <div class="test-section">
+                    <h3>Socket.io Test</h3>
+                    <div id="socketStatus">Connecting...</div>
+                    <button onclick="testSocket()">Test Socket Connection</button>
+                </div>
+
+                <div class="test-section">
+                    <h3>Chart.js Test</h3>
+                    <canvas id="testChart" width="400" height="200"></canvas>
+                </div>
+
+                <div class="test-section">
+                    <h3>Moment.js Test</h3>
+                    <div id="momentTest"></div>
+                </div>
+
+                <div class="test-section">
+                    <h3>Navigation</h3>
+                    <a href="/" class="btn-primary">Back to Main App</a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Test Socket.io
+        let socket = null;
+        
+        function initSocket() {
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    document.getElementById('socketStatus').textContent = 'Connected to Socket.io!';
+                    document.getElementById('socketStatus').style.color = 'green';
+                });
+                
+                socket.on('disconnect', () => {
+                    document.getElementById('socketStatus').textContent = 'Disconnected from Socket.io';
+                    document.getElementById('socketStatus').style.color = 'red';
+                });
+            } catch (error) {
+                document.getElementById('socketStatus').textContent = 'Socket.io Error: ' + error.message;
+                document.getElementById('socketStatus').style.color = 'red';
+            }
+        }
+
+        function testSocket() {
+            if (socket) {
+                socket.emit('test', { message: 'Hello from test page!' });
+                document.getElementById('socketStatus').textContent = 'Test message sent!';
+            }
+        }
+
+        // Test Chart.js
+        function initChart() {
+            try {
+                const ctx = document.getElementById('testChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+                        datasets: [{
+                            label: 'Test Data',
+                            data: [12, 19, 3, 5, 2],
+                            borderColor: '#1a1a1a',
+                            backgroundColor: 'rgba(26, 26, 26, 0.1)',
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Chart.js Test Chart'
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Chart.js Error:', error);
+            }
+        }
+
+        // Test Moment.js
+        function testMoment() {
+            try {
+                const now = moment();
+                const formatted = now.format('MMMM Do YYYY, h:mm:ss a');
+                document.getElementById('momentTest').textContent = `Current time: ${formatted}`;
+            } catch (error) {
+                document.getElementById('momentTest').textContent = 'Moment.js Error: ' + error.message;
+            }
+        }
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initSocket();
+            initChart();
+            testMoment();
+            
+            // Update moment time every second
+            setInterval(testMoment, 1000);
+        });
+    </script>
+
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(26, 26, 26, 0.1);
+        }
+
+        .test-section {
+            margin: 2rem 0;
+            padding: 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+
+        .test-section h3 {
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+        }
+
+        #socketStatus {
+            padding: 0.5rem;
+            margin: 1rem 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            background: #1a1a1a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #333;
+        }
+
+        #testChart {
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+
+        #momentTest {
+            font-family: monospace;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</body>
+</html>

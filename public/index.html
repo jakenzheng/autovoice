@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -23,6 +26,14 @@
                     <h1>AutoVoice</h1>
                 </div>
                 <p class="subtitle">Invoice Scanner for Auto Repair Shops</p>
+                
+                <!-- Navigation Menu -->
+                <nav class="nav-menu" id="navMenu" style="display: none;">
+                    <a href="#" class="nav-link active" onclick="showUploadSection()">Upload</a>
+                    <a href="#" class="nav-link" onclick="showAnalytics()">Analytics</a>
+                    <a href="#" class="nav-link" onclick="showHistory()">History</a>
+                    <a href="#" class="nav-link" onclick="showProfile()">Profile</a>
+                </nav>
                 
                 <!-- User Menu -->
                 <div class="user-menu" id="userMenu" style="display: none;">
@@ -272,6 +283,112 @@
                         </div>
                     </div>
 
+                    <!-- Real-time Processing Status -->
+                    <div class="processing-status" id="processingStatus" style="display: none;">
+                        <div class="status-header">
+                            <h3>Processing Status</h3>
+                            <div class="status-indicator">
+                                <div class="spinner"></div>
+                                <span id="statusText">Processing...</span>
+                            </div>
+                        </div>
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span id="progressText">0 / 0 files processed</span>
+                                <span id="currentFile">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analytics Chart -->
+                    <div class="analytics-section" id="analyticsSection" style="display: none;">
+                        <h3>Analytics Overview</h3>
+                        <div class="analytics-content">
+                            <div class="chart-container">
+                                <h4>Total Parts vs Labor Distribution</h4>
+                                <canvas id="partsLaborChart"></canvas>
+                            </div>
+                            <div class="batches-summary">
+                                <h4>Batches Processed</h4>
+                                <div class="batches-list" id="batchesList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Section -->
+                    <div class="history-section" id="historySection" style="display: none;">
+                        <h3>Processing History</h3>
+                        <div class="history-header">
+                            <div class="history-filters">
+                                <select id="monthFilter" onchange="window.invoiceClassifier.filterHistory()">
+                                    <option value="">All Months</option>
+                                </select>
+                                <select id="yearFilter" onchange="window.invoiceClassifier.filterHistory()">
+                                    <option value="">All Years</option>
+                                </select>
+                            </div>
+                            <div class="history-actions">
+                                <button class="btn-primary" onclick="exportAllBatches()">
+                                    <svg class="btn-emblem" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 2L8 14" stroke="currentColor" stroke-width="1.5"/>
+                                        <path d="M4 10L8 14L12 10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                        <path d="M2 14L14 14" stroke="currentColor" stroke-width="1.5"/>
+                                    </svg>
+                                    Export All Batches
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="history-stats">
+                            <div class="stat-card">
+                                <h4>Total Batches</h4>
+                                <span id="totalBatchesCount">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Total Files</h4>
+                                <span id="totalFilesCount">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Total Parts</h4>
+                                <span id="historyTotalParts">$0.00</span>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Total Labor</h4>
+                                <span id="historyTotalLabor">$0.00</span>
+                            </div>
+                        </div>
+                        
+                        <div class="history-table-container">
+                            <table class="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Batch Name</th>
+                                        <th>Created</th>
+                                        <th>Status</th>
+                                        <th>Files</th>
+                                        <th>Parts</th>
+                                        <th>Labor</th>
+                                        <th>Tax</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <!-- History data will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="monthly-breakdown">
+                            <h4>Monthly Breakdown</h4>
+                            <div id="monthlyBreakdown" class="monthly-charts">
+                                <!-- Monthly charts will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="action-buttons">
                         <button class="btn-secondary" onclick="resetApp()">
@@ -289,6 +406,15 @@
                             </svg>
                             Export Results
                         </button>
+                        <button class="btn-tertiary" onclick="showAnalytics()">
+                            <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M3 3L17 17" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M17 3L3 17" stroke="currentColor" stroke-width="1.5"/>
+                                <circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            View Analytics
+                        </button>
+
                     </div>
                 </div>
             </section>
@@ -390,14 +516,40 @@
         <!-- Image Modal -->
         <div class="image-modal" id="imageModal">
             <div class="modal-content">
-                <button class="close-modal" id="closeModal">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M18 6L6 18" stroke="currentColor" stroke-width="1.5"/>
-                        <path d="M6 6L18 18" stroke="currentColor" stroke-width="1.5"/>
-                    </svg>
-                </button>
-                <h3 id="modalTitle">Document Image</h3>
-                <img id="modalImage" src="" alt="Document">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Invoice Image</h3>
+                    <button class="close-modal" id="closeModal">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <path d="M18 6L6 18" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M6 6L18 18" stroke="currentColor" stroke-width="1.5"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <img id="modalImage" src="" alt="Invoice Image">
+                    <div class="image-info" id="imageInfo">
+                        <div class="info-row">
+                            <span class="info-label">Parts:</span>
+                            <span class="info-value" id="modalParts">$0.00</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Labor:</span>
+                            <span class="info-value" id="modalLabor">$0.00</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Tax:</span>
+                            <span class="info-value" id="modalTax">$0.00</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Status:</span>
+                            <span class="info-value" id="modalStatus">Success</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Confidence:</span>
+                            <span class="info-value" id="modalConfidence">Medium</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
