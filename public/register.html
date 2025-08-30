@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account - AutoVoice</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg class="logo-emblem" width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 4L44 24L24 44L4 24L24 4Z" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+                        <path d="M24 12L36 24L24 36L12 24L24 12Z" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                        <circle cx="24" cy="24" r="4" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                    </svg>
+                    <h1>AutoVoice</h1>
+                </div>
+                <p class="subtitle">Invoice Scanner for Auto Repair Shops</p>
+            </div>
+        </header>
+
+        <!-- Registration Form -->
+        <main class="auth-page">
+            <div class="auth-container">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <h2>Create Your Account</h2>
+                        <p>Join AutoVoice to start processing your invoices</p>
+                    </div>
+                    
+                    <form id="registerForm" class="auth-form">
+                        <div class="form-group">
+                            <label for="firstName">First Name</label>
+                            <input type="text" id="firstName" name="firstName" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="lastName">Last Name</label>
+                            <input type="text" id="lastName" name="lastName" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="businessName">Business Name (Optional)</label>
+                            <input type="text" id="businessName" name="businessName">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" required minlength="8">
+                        </div>
+                        
+                        <button type="submit" class="auth-submit-btn">
+                            <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2L18 8.5V15.5L10 22L2 15.5V8.5L10 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M10 6L14 9.5V12.5L10 16L6 12.5V9.5L10 6Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Create Account
+                        </button>
+                    </form>
+                    
+                    <div class="auth-footer">
+                        <p>Already have an account? <a href="/login.html">Sign In</a></p>
+                        <p><a href="/">← Back to Home</a></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="/script.js"></script>
+    <script>
+        // Registration page specific JavaScript
+        document.getElementById('registerForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const data = {
+                firstName: formData.get('firstName'),
+                lastName: formData.get('lastName'),
+                email: formData.get('email'),
+                businessName: formData.get('businessName'),
+                password: formData.get('password')
+            };
+            
+            try {
+                const response = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showToast('Account created successfully! Please check your email to verify your account.', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/login.html';
+                    }, 2000);
+                } else {
+                    showToast(result.message || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showToast('Registration failed', 'error');
+            }
+        });
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            
+            const container = document.getElementById('toastContainer');
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

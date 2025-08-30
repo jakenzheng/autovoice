@@ -1373,3 +1373,135 @@ body {
     width: 100%;
   }
 }
+
+/* Authentication Pages */
+.auth-page {
+  min-height: calc(100vh - 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-card {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.auth-header h2 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 0.5rem;
+}
+
+.auth-header p {
+  color: #666;
+  font-size: 1rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.auth-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.auth-form label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.auth-form input {
+  padding: 0.75rem;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: #1a1a1a;
+}
+
+.auth-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 1rem;
+}
+
+.auth-submit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(26, 26, 26, 0.3);
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.auth-footer p {
+  margin: 0.5rem 0;
+  color: #666;
+}
+
+.auth-footer a {
+  color: #1a1a1a;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.auth-footer a:hover {
+  color: #333;
+  text-decoration: underline;
+}
+
+/* Auth page responsive */
+@media (max-width: 768px) {
+  .auth-page {
+    padding: 1rem;
+  }
+
+  .auth-card {
+    padding: 2rem;
+  }
+
+  .auth-header h2 {
+    font-size: 1.5rem;
+  }
+}
