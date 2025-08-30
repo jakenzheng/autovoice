@@ -18,7 +18,7 @@ const { supabase } = require('./supabase-config');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware - COMPLETELY DISABLED to fix all issues
+// Security middleware - COMPLETELY REMOVED to fix CSP issues
 // app.use(helmet());
 
 // Middleware

@@ -25,8 +25,7 @@ router.post('/signup', apiRateLimit, async (req, res) => {
                     first_name: firstName,
                     last_name: lastName,
                     business_name: businessName || null
-                },
-                emailRedirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth-callback`
+                }
             }
         });
 
