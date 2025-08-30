@@ -8,8 +8,7 @@ class InvoiceClassifier {
     constructor() {
         this.selectedFiles = [];
         this.results = [];
-        this.init();
-        this.checkAuthStatus();
+        // Don't call init() here - it will be called after DOM is loaded
     }
 
     init() {
@@ -18,27 +17,46 @@ class InvoiceClassifier {
     }
 
     setupEventListeners() {
-        // Unified file input change
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            this.handleFileSelection(e.target.files);
-        });
+        // Remove existing event listeners to prevent duplicates
+        const fileInput = document.getElementById('fileInput');
+        const processBtn = document.getElementById('processBtn');
+        const closeModal = document.getElementById('closeModal');
+        const imageModal = document.getElementById('imageModal');
 
-        // Process button
-        document.getElementById('processBtn').addEventListener('click', () => {
-            this.processInvoices();
-        });
+        // Clone and replace elements to remove existing listeners
+        if (fileInput) {
+            const newFileInput = fileInput.cloneNode(true);
+            fileInput.parentNode.replaceChild(newFileInput, fileInput);
+            newFileInput.addEventListener('change', (e) => {
+                this.handleFileSelection(e.target.files);
+            });
+        }
 
-        // Modal close button
-        document.getElementById('closeModal').addEventListener('click', () => {
-            this.closeImageModal();
-        });
+        if (processBtn) {
+            const newProcessBtn = processBtn.cloneNode(true);
+            processBtn.parentNode.replaceChild(newProcessBtn, processBtn);
+            newProcessBtn.addEventListener('click', () => {
+                this.processInvoices();
+            });
+        }
 
-        // Close modal when clicking outside
-        document.getElementById('imageModal').addEventListener('click', (e) => {
-            if (e.target.id === 'imageModal') {
+        if (closeModal) {
+            const newCloseModal = closeModal.cloneNode(true);
+            closeModal.parentNode.replaceChild(newCloseModal, closeModal);
+            newCloseModal.addEventListener('click', () => {
                 this.closeImageModal();
-            }
-        });
+            });
+        }
+
+        if (imageModal) {
+            const newImageModal = imageModal.cloneNode(true);
+            imageModal.parentNode.replaceChild(newImageModal, imageModal);
+            newImageModal.addEventListener('click', (e) => {
+                if (e.target.id === 'imageModal') {
+                    this.closeImageModal();
+                }
+            });
+        }
     }
 
     setupDragAndDrop() {
