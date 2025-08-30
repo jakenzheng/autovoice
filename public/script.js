@@ -425,14 +425,22 @@ class InvoiceClassifier {
         const authButtons = document.getElementById('authButtons');
         const userMenu = document.getElementById('userMenu');
         const userName = document.getElementById('userName');
+        const welcomeSection = document.getElementById('welcomeSection');
+        const mainContent = document.getElementById('mainContent');
 
         if (currentUser) {
+            // User is authenticated - show main content, hide welcome
             authButtons.style.display = 'none';
             userMenu.style.display = 'flex';
             userName.textContent = `${currentUser.firstName} ${currentUser.lastName}`;
+            welcomeSection.style.display = 'none';
+            mainContent.style.display = 'block';
         } else {
+            // User is not authenticated - show welcome, hide main content
             authButtons.style.display = 'flex';
             userMenu.style.display = 'none';
+            welcomeSection.style.display = 'block';
+            mainContent.style.display = 'none';
         }
     }
 
@@ -485,7 +493,7 @@ async function handleLogin(event) {
             
             window.invoiceClassifier.updateAuthUI();
             closeLoginModal();
-            window.invoiceClassifier.showToast('Login successful', 'success');
+            window.invoiceClassifier.showToast('Login successful! Welcome back.', 'success');
         } else {
             window.invoiceClassifier.showToast(data.message || 'Login failed', 'error');
         }
@@ -526,6 +534,11 @@ async function handleRegister(event) {
             window.invoiceClassifier.updateAuthUI();
             closeRegisterModal();
             window.invoiceClassifier.showToast('Registration successful! Please check your email to verify your account.', 'success');
+            
+            // If user is immediately authenticated (no email verification required), show main content
+            if (data.user) {
+                window.invoiceClassifier.updateAuthUI();
+            }
         } else {
             window.invoiceClassifier.showToast(data.message || 'Registration failed', 'error');
         }
@@ -657,4 +670,8 @@ async function logout() {
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.invoiceClassifier = new InvoiceClassifier();
+    window.invoiceClassifier.init();
+    
+    // Check authentication status on page load
+    window.invoiceClassifier.checkAuthStatus();
 });

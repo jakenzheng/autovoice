@@ -51,8 +51,71 @@
             </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
+        <!-- Welcome Section (shown by default) -->
+        <main id="welcomeSection" class="welcome-section">
+            <div class="welcome-container">
+                <div class="welcome-hero">
+                    <div class="hero-emblem">
+                        <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                            <path d="M60 10L110 60L60 110L10 60L60 10Z" stroke="#1a1a1a" stroke-width="3" fill="none"/>
+                            <path d="M60 25L85 50L60 75L35 50L60 25Z" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+                            <circle cx="60" cy="60" r="8" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+                        </svg>
+                    </div>
+                    <h2>Welcome to AutoVoice</h2>
+                    <p class="hero-subtitle">Transform your luxury automobile repair business with intelligent invoice processing</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">🚗</div>
+                            <h3>Luxury Focus</h3>
+                            <p>Built specifically for high-end automobile repair businesses</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🤖</div>
+                            <h3>AI-Powered</h3>
+                            <p>Advanced AI extracts parts, labor, and tax data with precision</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📊</div>
+                            <h3>Smart Analytics</h3>
+                            <p>Comprehensive reporting and business insights</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">⚡</div>
+                            <h3>Lightning Fast</h3>
+                            <p>Process hundreds of invoices in minutes, not hours</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="auth-cta">
+                    <h3>Get Started Today</h3>
+                    <p>Create your account to start processing invoices</p>
+                    <div class="cta-buttons">
+                        <button class="cta-btn primary" onclick="showRegisterModal()">
+                            <svg class="btn-emblem" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2L22 8.5V15.5L12 22L2 15.5V8.5L12 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M12 6L18 9.5V13.5L12 17L6 13.5V9.5L12 6Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Create Account
+                        </button>
+                        <button class="cta-btn secondary" onclick="showLoginModal()">
+                            <svg class="btn-emblem" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2L22 8.5V15.5L12 22L2 15.5V8.5L12 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M12 6L18 9.5V13.5L12 17L6 13.5V9.5L12 6Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Sign In
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Main Content (hidden by default) -->
+        <main id="mainContent" class="main-content" style="display: none;">
             <!-- Upload Section -->
             <section class="upload-section" id="uploadSection">
                 <div class="upload-container">
