@@ -1,93 +1,65 @@
 const express = require('express');
-const { supabase } = require('../supabase-config');
+const { createClient } = require('@supabase/supabase-js');
 const { authenticateToken, apiRateLimit } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Apply authentication to all routes
-router.use(authenticateToken);
-router.use(apiRateLimit);
+// Create Supabase client (will be null if env vars not set)
+let supabase = null;
+try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    
+    if (supabaseUrl && supabaseKey) {
+        supabase = createClient(supabaseUrl, supabaseKey);
+    }
+} catch (error) {
+    console.log('Supabase client creation failed in batches routes');
+}
 
-// Get all batches for the current user
-router.get('/', async (req, res) => {
+// Get all batches for the authenticated user
+router.get('/', authenticateToken, apiRateLimit, async (req, res) => {
     try {
-        const userId = req.user.id;
-
-        // Check if Supabase is available
         if (!supabase) {
-            // Return demo data when Supabase is not available
-            const demoBatches = [
+            // Return demo data if Supabase is not available
+            return res.json([
                 {
                     id: 'demo-batch-1',
-                    user_id: userId,
                     batch_name: 'Demo Batch 1',
                     description: 'Sample batch for demonstration',
                     status: 'completed',
                     total_invoices: 5,
                     processed_invoices: 5,
-                    total_parts: 134.02,
-                    total_labor: 45.00,
-                    total_tax: 23.19,
-                    flagged_count: 1,
-                    created_at: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-                    updated_at: new Date().toISOString()
-                },
-                {
-                    id: 'demo-batch-2',
-                    user_id: userId,
-                    batch_name: 'Demo Batch 2',
-                    description: 'Another sample batch',
-                    status: 'completed',
-                    total_invoices: 3,
-                    processed_invoices: 3,
-                    total_parts: 713.36,
-                    total_labor: 95.56,
-                    total_tax: 66.93,
-                    flagged_count: 0,
-                    created_at: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+                    total_parts: 1250.50,
+                    total_labor: 450.00,
+                    total_tax: 125.05,
+                    created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }
-            ];
+            ]);
+        }
 
-            return res.json({
-                success: true,
-                batches: demoBatches
+        const { data: batches, error } = await supabase
+            .from('batches')
+            .select('*')
+            .eq('user_id', req.user.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching batches:', error);
+            return res.status(500).json({
+                error: 'Failed to fetch batches',
+                message: error.message
             });
         }
 
-        // Try to get batches from database
-        try {
-            const { data: batches, error } = await supabase
-                .from('batches')
-                .select('*')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error('Get batches error:', error);
-                return res.json({
-                    success: true,
-                    batches: []
-                });
-            }
-
-            res.json({
-                success: true,
-                batches: batches || []
-            });
-        } catch (tableError) {
-            console.log('Batches table not available, returning empty array');
-            res.json({
-                success: true,
-                batches: []
-            });
-        }
+        res.json(batches || []);
 
     } catch (error) {
-        console.error('Get batches error:', error);
+        console.error('Batches fetch error:', error);
         res.status(500).json({
             error: 'Internal server error',
-            message: 'Unable to retrieve batches'
+            message: 'Failed to fetch batches'
         });
     }
 });

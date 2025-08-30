@@ -26,18 +26,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
 
-// Bypass Vercel deployment protection
-app.use((req, res, next) => {
-    const bypassToken = req.query['x-vercel-protection-bypass'];
-    if (bypassToken) {
-        res.cookie('x-vercel-protection-bypass', bypassToken, { 
-            httpOnly: true, 
-            secure: true, 
-            sameSite: 'lax' 
-        });
-    }
-    next();
-});
+
 
 // Supabase configuration (optional - will work without it)
 let supabase = null;
@@ -95,22 +84,8 @@ async function optimizeImage(imageBuffer) {
     }
 }
 
-// File upload configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = 'uploads/';
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const timestamp = Date.now();
-        const randomId = Math.floor(Math.random() * 1000000000);
-        const ext = path.extname(file.originalname);
-        cb(null, `invoices-${timestamp}-${randomId}${ext}`);
-    }
-});
+// File upload configuration - optimized for Vercel serverless
+const storage = multer.memoryStorage(); // Use memory storage for serverless
 
 const upload = multer({ 
     storage: storage,
@@ -168,7 +143,9 @@ app.get('/test', (req, res) => {
     res.json({ 
         message: 'Server is running!', 
         timestamp: new Date().toISOString(),
-        supabase: supabase ? 'connected' : 'demo mode'
+        supabase: supabase ? 'connected' : 'demo mode',
+        environment: process.env.NODE_ENV || 'development',
+        version: '1.0.0'
     });
 });
 
@@ -259,7 +236,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                 }
 
                 // Optimize image
-                const imageBuffer = fs.readFileSync(file.path);
+                const imageBuffer = file.buffer; // Use file.buffer for memory storage
                 const optimizedBuffer = await optimizeImage(imageBuffer);
                 
                 // Generate thumbnail
@@ -279,7 +256,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                                 original_filename: file.originalname,
                                 file_size: file.size,
                                 mime_type: file.mimetype,
-                                image_url: `/uploads/${file.filename}`,
+                                image_url: `/uploads/${file.originalname}`, // Store original name as URL
                                 thumbnail_url: thumbnail ? `data:image/jpeg;base64,${thumbnail}` : null,
                                 extracted_parts: parseFloat(data.parts) || 0,
                                 extracted_labor: parseFloat(data.labor) || 0,
@@ -313,10 +290,10 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                 if (data.flagged) flaggedCount++;
                 processedCount++;
 
-                console.log(`Extracted data for ${file.filename}:`, data);
+                console.log(`Extracted data for ${file.originalname}:`, data);
 
             } catch (error) {
-                console.error(`Error processing ${file.filename}:`, error);
+                console.error(`Error processing ${file.originalname}:`, error);
                 results.push({
                     filename: file.originalname,
                     error: 'Processing failed',
@@ -425,7 +402,8 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        supabase: supabase ? 'connected' : 'demo mode'
+        supabase: supabase ? 'connected' : 'demo mode',
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 

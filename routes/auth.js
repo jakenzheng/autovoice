@@ -1,8 +1,21 @@
 const express = require('express');
-const { supabase } = require('../supabase-config');
+const { createClient } = require('@supabase/supabase-js');
 const { apiRateLimit } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Create Supabase client (will be null if env vars not set)
+let supabase = null;
+try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    
+    if (supabaseUrl && supabaseKey) {
+        supabase = createClient(supabaseUrl, supabaseKey);
+    }
+} catch (error) {
+    console.log('Supabase client creation failed in auth routes');
+}
 
 // Supabase Auth routes
 router.post('/signup', apiRateLimit, async (req, res) => {
@@ -13,6 +26,13 @@ router.post('/signup', apiRateLimit, async (req, res) => {
             return res.status(400).json({
                 error: 'Missing required fields',
                 message: 'Email, password, first name, and last name are required'
+            });
+        }
+
+        if (!supabase) {
+            return res.status(503).json({
+                error: 'Service unavailable',
+                message: 'Authentication service is not configured'
             });
         }
 
@@ -55,20 +75,25 @@ router.post('/signup', apiRateLimit, async (req, res) => {
 
         // Create user profile in our users table
         if (authData.user) {
-            const { error: profileError } = await supabase
-                .from('users')
-                .insert({
-                    id: authData.user.id,
-                    email: authData.user.email,
-                    first_name: firstName,
-                    last_name: lastName,
-                    business_name: businessName || null,
-                    email_verified: authData.user.email_confirmed_at ? true : false,
-                    is_active: true
-                });
+            try {
+                const { error: profileError } = await supabase
+                    .from('users')
+                    .insert({
+                        id: authData.user.id,
+                        email: authData.user.email,
+                        first_name: firstName,
+                        last_name: lastName,
+                        business_name: businessName || null,
+                        email_verified: authData.user.email_confirmed_at ? true : false,
+                        is_active: true
+                    });
 
-            if (profileError) {
-                console.error('Profile creation error:', profileError);
+                if (profileError) {
+                    console.error('Profile creation error:', profileError);
+                }
+            } catch (dbError) {
+                console.error('Database error during profile creation:', dbError);
+                // Continue even if profile creation fails
             }
         }
 
@@ -100,6 +125,13 @@ router.post('/signin', apiRateLimit, async (req, res) => {
             return res.status(400).json({
                 error: 'Missing credentials',
                 message: 'Email and password are required'
+            });
+        }
+
+        if (!supabase) {
+            return res.status(503).json({
+                error: 'Service unavailable',
+                message: 'Authentication service is not configured'
             });
         }
 
@@ -164,6 +196,13 @@ router.post('/signin', apiRateLimit, async (req, res) => {
 
 router.post('/signout', async (req, res) => {
     try {
+        if (!supabase) {
+            return res.status(503).json({
+                error: 'Service unavailable',
+                message: 'Authentication service is not configured'
+            });
+        }
+
         const { error } = await supabase.auth.signOut();
         
         if (error) {
@@ -189,6 +228,13 @@ router.post('/signout', async (req, res) => {
 
 router.get('/me', async (req, res) => {
     try {
+        if (!supabase) {
+            return res.status(503).json({
+                error: 'Service unavailable',
+                message: 'Authentication service is not configured'
+            });
+        }
+
         // Get the authorization header
         const authHeader = req.headers['authorization'];
         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -249,6 +295,13 @@ router.get('/me', async (req, res) => {
 
 router.put('/profile', async (req, res) => {
     try {
+        if (!supabase) {
+            return res.status(503).json({
+                error: 'Service unavailable',
+                message: 'Authentication service is not configured'
+            });
+        }
+
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user) {
