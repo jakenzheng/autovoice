@@ -75,8 +75,6 @@ const apiRateLimit = rateLimiter({
 
 module.exports = {
     authenticateToken,
-    generateToken,
-    generateRefreshToken,
     authRateLimit,
     apiRateLimit
 };

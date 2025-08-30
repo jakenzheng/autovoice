@@ -18,10 +18,8 @@ const { supabase } = require('./supabase-config');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware - temporarily disable CSP to fix font and script issues
-app.use(helmet({
-  contentSecurityPolicy: false
-}));
+// Security middleware - COMPLETELY DISABLED to fix all issues
+// app.use(helmet());
 
 // Middleware
 app.use(cors({

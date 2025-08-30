@@ -25,12 +25,29 @@ router.post('/signup', apiRateLimit, async (req, res) => {
                     first_name: firstName,
                     last_name: lastName,
                     business_name: businessName || null
-                }
+                },
+                emailRedirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth-callback`
             }
         });
 
         if (authError) {
             console.error('Signup error:', authError);
+            
+            // Handle specific Supabase auth errors
+            if (authError.message.includes('Email address') && authError.message.includes('invalid')) {
+                return res.status(400).json({
+                    error: 'Invalid email format',
+                    message: 'Please provide a valid email address'
+                });
+            }
+            
+            if (authError.message.includes('already registered')) {
+                return res.status(409).json({
+                    error: 'Email already registered',
+                    message: 'An account with this email already exists'
+                });
+            }
+            
             return res.status(400).json({
                 error: 'Signup failed',
                 message: authError.message
