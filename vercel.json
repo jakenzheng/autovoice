@@ -4,13 +4,13 @@
     {
       "src": "server.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
-    {
-      "src": "/socket.io/(.*)",
-      "dest": "/server.js"
-    },
     {
       "src": "/api/(.*)",
       "dest": "/server.js"
@@ -25,14 +25,6 @@
     },
     {
       "src": "/test",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/login",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/register",
       "dest": "/server.js"
     },
     {
