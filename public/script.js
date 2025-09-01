@@ -801,7 +801,7 @@ class InvoiceClassifier {
     updateAuthUI() {
         const authButtons = document.getElementById('authButtons');
         const userMenu = document.getElementById('userMenu');
-        const navMenu = document.getElementById('navMenu');
+        const mainNav = document.getElementById('mainNav');
         const userName = document.getElementById('userName');
         const welcomeSection = document.getElementById('welcomeSection');
         const mainContent = document.getElementById('mainContent');
@@ -813,7 +813,7 @@ class InvoiceClassifier {
             console.log('User authenticated, showing main content');
             authButtons.style.display = 'none';
             userMenu.style.display = 'flex';
-            if (navMenu) navMenu.style.display = 'flex';
+            if (mainNav) mainNav.style.display = 'flex';
             userName.textContent = `${currentUser.firstName} ${currentUser.lastName}`;
             welcomeSection.style.display = 'none';
             mainContent.style.display = 'block';
@@ -822,7 +822,7 @@ class InvoiceClassifier {
             console.log('User not authenticated, showing welcome section');
             authButtons.style.display = 'flex';
             userMenu.style.display = 'none';
-            if (navMenu) navMenu.style.display = 'none';
+            if (mainNav) mainNav.style.display = 'none';
             welcomeSection.style.display = 'block';
             mainContent.style.display = 'none';
         }

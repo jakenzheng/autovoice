@@ -17,43 +17,79 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <div class="logo">
-                    <svg class="logo-emblem" width="48" height="48" viewBox="0 0 48 48" fill="none">
-                        <path d="M24 4L44 24L24 44L4 24L24 4Z" stroke="#1a1a1a" stroke-width="2" fill="none"/>
-                        <path d="M24 12L36 24L24 36L12 24L24 12Z" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
-                        <circle cx="24" cy="24" r="4" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
-                    </svg>
-                    <h1>AutoVoice</h1>
+                <!-- Left: Logo -->
+                <div class="header-left">
+                    <div class="logo">
+                        <svg class="logo-emblem" width="40" height="40" viewBox="0 0 48 48" fill="none">
+                            <path d="M24 4L44 24L24 44L4 24L24 4Z" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+                            <path d="M24 12L36 24L24 36L12 24L24 12Z" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                            <circle cx="24" cy="24" r="4" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+                        </svg>
+                        <h1>AutoVoice</h1>
+                    </div>
                 </div>
-                <p class="subtitle">Invoice Scanner for Auto Repair Shops</p>
                 
-                <!-- Navigation Menu -->
-                <nav class="nav-menu" id="navMenu" style="display: none;">
-                    <a href="#" class="nav-link active" onclick="showUploadSection()">Upload</a>
-                </nav>
-                
-                <!-- User Menu -->
-                <div class="user-menu" id="userMenu" style="display: none;">
-                    <div class="user-info">
-                        <span id="userName">User</span>
-                        <button class="user-menu-btn" onclick="toggleUserMenu()">
+                <!-- Center: Main Navigation -->
+                <div class="header-center">
+                    <nav class="main-nav" id="mainNav" style="display: none;">
+                        <button class="nav-btn primary" onclick="showUploadSection()">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                                <path d="M10 6L10 14" stroke="currentColor" stroke-width="1.5"/>
-                                <path d="M6 10L14 10" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M10 2L10 18" stroke="currentColor" stroke-width="2"/>
+                                <path d="M2 10L18 10" stroke="currentColor" stroke-width="2"/>
                             </svg>
+                            Upload
                         </button>
-                    </div>
-                    <div class="user-dropdown" id="userDropdown" style="display: none;">
-                        <button onclick="showDashboard()">Dashboard</button>
-                        <button onclick="logout()">Logout</button>
-                    </div>
+                        <button class="nav-btn secondary" onclick="showDashboard()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <rect x="14" y="3" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <rect x="14" y="9" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <rect x="3" y="13" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <rect x="14" y="15" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                            </svg>
+                            Dashboard
+                        </button>
+                    </nav>
                 </div>
                 
-                <!-- Auth Buttons -->
-                <div class="auth-buttons" id="authButtons">
-                    <a href="/login.html" class="auth-btn login">Login</a>
-                    <a href="/register.html" class="auth-btn register">Register</a>
+                <!-- Right: User Actions -->
+                <div class="header-right">
+                    <!-- User Menu (when logged in) -->
+                    <div class="user-menu" id="userMenu" style="display: none;">
+                        <div class="user-info">
+                            <span id="userName">User</span>
+                            <button class="user-avatar" onclick="toggleUserMenu()">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="8" r="5" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    <path d="M20 21C20 16.5817 16.4183 13 12 13C7.58172 13 4 16.5817 4 21" stroke="currentColor" stroke-width="2" fill="none"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="user-dropdown" id="userDropdown" style="display: none;">
+                            <button onclick="showDashboard()">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <rect x="2" y="2" width="5" height="5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <rect x="9" y="2" width="5" height="5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <rect x="2" y="9" width="5" height="5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <rect x="9" y="9" width="5" height="5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                </svg>
+                                Dashboard
+                            </button>
+                            <button onclick="logout()">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M6 12L2 8L6 4" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    <path d="M2 8H14" stroke="currentColor" stroke-width="2" fill="none"/>
+                                </svg>
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Auth Buttons (when not logged in) -->
+                    <div class="auth-buttons" id="authButtons">
+                        <a href="/login.html" class="auth-btn login">Sign In</a>
+                        <a href="/register.html" class="auth-btn register">Get Started</a>
+                    </div>
                 </div>
             </div>
         </header>
