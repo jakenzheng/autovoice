@@ -1008,6 +1008,14 @@ body {
   color: #EF4444;
 }
 
+.reasoning-text {
+  font-size: var(--text-sm);
+  color: var(--royal-gray);
+  max-width: 200px;
+  line-height: 1.4;
+  font-style: italic;
+}
+
 .clickable-filename {
   color: var(--royal-black);
   cursor: pointer;
