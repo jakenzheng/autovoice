@@ -30,9 +30,6 @@
                 <!-- Navigation Menu -->
                 <nav class="nav-menu" id="navMenu" style="display: none;">
                     <a href="#" class="nav-link active" onclick="showUploadSection()">Upload</a>
-                    <a href="#" class="nav-link" onclick="showAnalytics()">Analytics</a>
-                    <a href="#" class="nav-link" onclick="showHistory()">History</a>
-                    <a href="#" class="nav-link" onclick="showProfile()">Profile</a>
                 </nav>
                 
                 <!-- User Menu -->
@@ -49,7 +46,6 @@
                     </div>
                     <div class="user-dropdown" id="userDropdown" style="display: none;">
                         <button onclick="showDashboard()">Dashboard</button>
-                        <button onclick="showProfile()">Profile</button>
                         <button onclick="logout()">Logout</button>
                     </div>
                 </div>
@@ -303,91 +299,11 @@
                         </div>
                     </div>
 
-                    <!-- Analytics Chart -->
-                    <div class="analytics-section" id="analyticsSection" style="display: none;">
-                        <h3>Analytics Overview</h3>
-                        <div class="analytics-content">
-                            <div class="chart-container">
-                                <h4>Total Parts vs Labor Distribution</h4>
-                                <canvas id="partsLaborChart"></canvas>
-                            </div>
-                            <div class="batches-summary">
-                                <h4>Batches Processed</h4>
-                                <div class="batches-list" id="batchesList"></div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- History Section -->
-                    <div class="history-section" id="historySection" style="display: none;">
-                        <h3>Processing History</h3>
-                        <div class="history-header">
-                            <div class="history-filters">
-                                <select id="monthFilter" onchange="window.invoiceClassifier.filterHistory()">
-                                    <option value="">All Months</option>
-                                </select>
-                                <select id="yearFilter" onchange="window.invoiceClassifier.filterHistory()">
-                                    <option value="">All Years</option>
-                                </select>
-                            </div>
-                            <div class="history-actions">
-                                <button class="btn-primary" onclick="exportAllBatches()">
-                                    <svg class="btn-emblem" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                        <path d="M8 2L8 14" stroke="currentColor" stroke-width="1.5"/>
-                                        <path d="M4 10L8 14L12 10" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                                        <path d="M2 14L14 14" stroke="currentColor" stroke-width="1.5"/>
-                                    </svg>
-                                    Export All Batches
-                                </button>
-                            </div>
-                        </div>
+
+
                         
-                        <div class="history-stats">
-                            <div class="stat-card">
-                                <h4>Total Batches</h4>
-                                <span id="totalBatchesCount">0</span>
-                            </div>
-                            <div class="stat-card">
-                                <h4>Total Files</h4>
-                                <span id="totalFilesCount">0</span>
-                            </div>
-                            <div class="stat-card">
-                                <h4>Total Parts</h4>
-                                <span id="historyTotalParts">$0.00</span>
-                            </div>
-                            <div class="stat-card">
-                                <h4>Total Labor</h4>
-                                <span id="historyTotalLabor">$0.00</span>
-                            </div>
-                        </div>
-                        
-                        <div class="history-table-container">
-                            <table class="history-table">
-                                <thead>
-                                    <tr>
-                                        <th>Batch Name</th>
-                                        <th>Created</th>
-                                        <th>Status</th>
-                                        <th>Files</th>
-                                        <th>Parts</th>
-                                        <th>Labor</th>
-                                        <th>Tax</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="historyTableBody">
-                                    <!-- History data will be populated here -->
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <div class="monthly-breakdown">
-                            <h4>Monthly Breakdown</h4>
-                            <div id="monthlyBreakdown" class="monthly-charts">
-                                <!-- Monthly charts will be populated here -->
-                            </div>
-                        </div>
-                    </div>
+
 
                     <!-- Action Buttons -->
                     <div class="action-buttons">
@@ -406,14 +322,7 @@
                             </svg>
                             Export Results
                         </button>
-                        <button class="btn-tertiary" onclick="showAnalytics()">
-                            <svg class="btn-emblem" width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M3 3L17 17" stroke="currentColor" stroke-width="1.5"/>
-                                <path d="M17 3L3 17" stroke="currentColor" stroke-width="1.5"/>
-                                <circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                            </svg>
-                            View Analytics
-                        </button>
+
 
                     </div>
                 </div>
@@ -497,15 +406,12 @@
                 <div class="modal-body">
                     <div class="dashboard-tabs">
                         <button class="tab-btn active" onclick="switchTab('batches')">Batches</button>
-                        <button class="tab-btn" onclick="switchTab('analytics')">Analytics</button>
                         <button class="tab-btn" onclick="switchTab('flagged')">Flagged Documents</button>
                     </div>
                     <div class="tab-content" id="batchesTab">
                         <div class="batches-list" id="batchesList"></div>
                     </div>
-                    <div class="tab-content" id="analyticsTab" style="display: none;">
-                        <div class="analytics-content" id="analyticsContent"></div>
-                    </div>
+
                     <div class="tab-content" id="flaggedTab" style="display: none;">
                         <div class="flagged-list" id="flaggedList"></div>
                     </div>

@@ -183,6 +183,65 @@ class InvoiceClassifier {
         }
     }
 
+    async toggleStatus(index) {
+        if (index >= 0 && index < this.results.length) {
+            const result = this.results[index];
+            
+            // Only allow toggling if the document is flagged
+            if (!result.flagged) {
+                this.showToast('Only flagged documents can be updated to approved', 'info');
+                return;
+            }
+
+            try {
+                // Update the result locally first
+                result.flagged = false;
+                
+                // Update the UI immediately
+                this.populateResultsTable();
+                this.updateSummaryTotals();
+                
+                // Show success message
+                this.showToast('Document status updated to approved', 'success');
+                
+                // If we have a batch ID, update the backend
+                if (this.currentBatchId && result.invoice_id) {
+                    await this.updateInvoiceStatus(result.invoice_id, false);
+                }
+                
+            } catch (error) {
+                console.error('Error updating status:', error);
+                // Revert the change if there was an error
+                result.flagged = true;
+                this.populateResultsTable();
+                this.updateSummaryTotals();
+                this.showToast('Error updating status. Please try again.', 'error');
+            }
+        }
+    }
+
+    async updateInvoiceStatus(invoiceId, flagged) {
+        try {
+            const response = await fetch(`/api/invoices/${invoiceId}/flag`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`
+                },
+                body: JSON.stringify({ flagged })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update invoice status');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error updating invoice status:', error);
+            throw error;
+        }
+    }
+
     updateSummaryTotals() {
         let totalParts = 0;
         let totalLabor = 0;
@@ -225,35 +284,7 @@ class InvoiceClassifier {
         partsLaborChart.update();
     }
 
-    filterHistory() {
-        const monthFilter = document.getElementById('monthFilter');
-        const yearFilter = document.getElementById('yearFilter');
-        const tableBody = document.getElementById('historyTableBody');
-        
-        if (!monthFilter || !yearFilter || !tableBody) return;
-        
-        const selectedMonth = monthFilter.value;
-        const selectedYear = yearFilter.value;
-        
-        // Get all batches from the current data
-        const allBatches = this.historyData || [];
-        
-        // Filter batches based on selection
-        const filteredBatches = allBatches.filter(batch => {
-            const date = new Date(batch.created_at);
-            const batchMonth = date.toLocaleDateString('en-US', { month: 'long' });
-            const batchYear = date.getFullYear().toString();
-            
-            const monthMatch = !selectedMonth || batchMonth === selectedMonth;
-            const yearMatch = !selectedYear || batchYear === selectedYear;
-            
-            return monthMatch && yearMatch;
-        });
-        
-        // Update the table with filtered data
-        displayHistoryTable(filteredBatches);
-        updateHistoryStats(filteredBatches);
-    }
+
 
     viewBatchDetails(batchId) {
         // TODO: Implement batch details view
@@ -561,7 +592,7 @@ class InvoiceClassifier {
                            value="${typeof result.tax === 'number' ? result.tax : 0}" step="0.01" min="0" 
                            onchange="window.invoiceClassifier.updateField(${index}, 'tax', this.value)">
                 </td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td><span class="status-badge ${statusClass} clickable-status" onclick="window.invoiceClassifier.toggleStatus(${index})">${statusText}</span></td>
                 <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
                 <td>
                     <button class="view-btn" onclick="window.invoiceClassifier.showImageModal('${result.filename}', ${index})">
@@ -1032,10 +1063,7 @@ function updatePieChartFromBatches(batches) {
         partsLaborChart.update();
     }
 
-function showProfile() {
-    // TODO: Implement profile management
-    window.invoiceClassifier.showToast('Profile management coming soon', 'info');
-}
+
 
 async function logout() {
     try {
@@ -1066,50 +1094,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // Analytics functions
 function showUploadSection() {
     const uploadSection = document.getElementById('uploadSection');
-    const analyticsSection = document.getElementById('analyticsSection');
-    const historySection = document.getElementById('historySection');
     
     if (uploadSection) {
         uploadSection.style.display = 'block';
-        if (analyticsSection) analyticsSection.style.display = 'none';
-        if (historySection) historySection.style.display = 'none';
     }
     
     // Update navigation active state
     updateNavigationActive('showUploadSection');
 }
 
-function showAnalytics() {
-    const analyticsSection = document.getElementById('analyticsSection');
-    const historySection = document.getElementById('historySection');
-    const uploadSection = document.getElementById('uploadSection');
-    
-    if (analyticsSection) {
-        analyticsSection.style.display = 'block';
-        if (historySection) historySection.style.display = 'none';
-        if (uploadSection) uploadSection.style.display = 'none';
-        loadAnalyticsData();
-    }
-    
-    // Update navigation active state
-    updateNavigationActive('showAnalytics');
-}
 
-function showHistory() {
-    const analyticsSection = document.getElementById('analyticsSection');
-    const historySection = document.getElementById('historySection');
-    const uploadSection = document.getElementById('uploadSection');
-    
-    if (historySection) {
-        historySection.style.display = 'block';
-        if (analyticsSection) analyticsSection.style.display = 'none';
-        if (uploadSection) uploadSection.style.display = 'none';
-        loadHistoryData();
-    }
-    
-    // Update navigation active state
-    updateNavigationActive('showHistory');
-}
+
+
 
 function updateNavigationActive(activePage) {
     const navLinks = document.querySelectorAll('.nav-link');
@@ -1123,314 +1119,20 @@ function updateNavigationActive(activePage) {
     }
 }
 
-async function exportAllBatches() {
-    if (!currentUser) {
-        window.invoiceClassifier.showToast('Please log in to export data', 'warning');
-        return;
-    }
-    
-    try {
-        window.invoiceClassifier.showToast('Preparing export...', 'info');
-        
-        // Create a download link for CSV export
-        const response = await fetch('/api/exports/batches?format=csv', {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `batches_export_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            window.invoiceClassifier.showToast('Export completed successfully!', 'success');
-        } else {
-            const errorData = await response.json();
-            window.invoiceClassifier.showToast(errorData.message || 'Export failed', 'error');
-        }
-    } catch (error) {
-        console.error('Export error:', error);
-        window.invoiceClassifier.showToast('Export failed', 'error');
-    }
-}
 
-async function loadAnalyticsData() {
-    if (!currentUser) {
-        console.log('No current user, skipping analytics load');
-        return;
-    }
-    
-    if (!authToken) {
-        console.log('No auth token, attempting to refresh authentication');
-        await window.invoiceClassifier.checkAuthStatus();
-        return;
-    }
-    
-    try {
-        console.log('Loading analytics data with token:', authToken.substring(0, 20) + '...');
-        
-        // Load batches data
-        const batchesResponse = await fetch('/api/batches', {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        if (batchesResponse.ok) {
-            const batchesData = await batchesResponse.json();
-            displayBatches(batchesData.batches);
-            updatePieChartFromBatches(batchesData.batches);
-        } else {
-            console.error('Analytics load failed:', batchesResponse.status, batchesResponse.statusText);
-            if (batchesResponse.status === 401) {
-                console.log('Authentication failed, attempting to refresh');
-                await window.invoiceClassifier.checkAuthStatus();
-            }
-        }
-        
-    } catch (error) {
-        console.error('Analytics load error:', error);
-    }
-}
 
-async function loadHistoryData() {
-    if (!currentUser) {
-        console.log('No current user, skipping history load');
-        return;
-    }
-    
-    if (!authToken) {
-        console.log('No auth token, attempting to refresh authentication');
-        await window.invoiceClassifier.checkAuthStatus();
-        return;
-    }
-    
-    try {
-        console.log('Loading history data with token:', authToken.substring(0, 20) + '...');
-        
-        const response = await fetch('/api/batches', {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            // Store data for filtering
-            window.invoiceClassifier.historyData = data.batches;
-            displayHistoryTable(data.batches);
-            updateHistoryStats(data.batches);
-            populateHistoryFilters(data.batches);
-            createMonthlyBreakdown(data.batches);
-        } else {
-            console.error('History load failed:', response.status, response.statusText);
-            if (response.status === 401) {
-                console.log('Authentication failed, attempting to refresh');
-                await window.invoiceClassifier.checkAuthStatus();
-            }
-        }
-    } catch (error) {
-        console.error('Error loading history data:', error);
-    }
-}
 
-function displayHistoryTable(batches) {
-    const tableBody = document.getElementById('historyTableBody');
-    
-    if (!tableBody) return;
-    
-    if (batches.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No batches found</td></tr>';
-        return;
-    }
-    
-    // Sort batches by creation date (newest first)
-    const sortedBatches = batches.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    
-    tableBody.innerHTML = sortedBatches.map(batch => {
-        const createdDate = new Date(batch.created_at);
-        const formattedDate = createdDate.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        const statusClass = `status-${batch.status}`;
-        
-        return `
-            <tr>
-                <td><strong>${batch.batch_name}</strong></td>
-                <td>${formattedDate}</td>
-                <td><span class="status-badge ${statusClass}">${batch.status}</span></td>
-                <td>${batch.processed_invoices || 0}</td>
-                <td>$${(batch.total_parts || 0).toFixed(2)}</td>
-                <td>$${(batch.total_labor || 0).toFixed(2)}</td>
-                <td>$${(batch.total_tax || 0).toFixed(2)}</td>
-                <td>
-                    <button class="action-btn" onclick="window.invoiceClassifier.viewBatchDetails('${batch.id}')">
-                        View
-                    </button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
 
-function updateHistoryStats(batches) {
-    const totalBatches = batches.length;
-    const totalFiles = batches.reduce((sum, batch) => sum + (batch.processed_invoices || 0), 0);
-    const totalParts = batches.reduce((sum, batch) => sum + (batch.total_parts || 0), 0);
-    const totalLabor = batches.reduce((sum, batch) => sum + (batch.total_labor || 0), 0);
-    
-    const totalBatchesEl = document.getElementById('totalBatchesCount');
-    const totalFilesEl = document.getElementById('totalFilesCount');
-    const historyTotalPartsEl = document.getElementById('historyTotalParts');
-    const historyTotalLaborEl = document.getElementById('historyTotalLabor');
-    
-    if (totalBatchesEl) totalBatchesEl.textContent = totalBatches;
-    if (totalFilesEl) totalFilesEl.textContent = totalFiles;
-    if (historyTotalPartsEl) historyTotalPartsEl.textContent = `$${totalParts.toFixed(2)}`;
-    if (historyTotalLaborEl) historyTotalLaborEl.textContent = `$${totalLabor.toFixed(2)}`;
-}
 
-function populateHistoryFilters(batches) {
-    const monthFilter = document.getElementById('monthFilter');
-    const yearFilter = document.getElementById('yearFilter');
-    
-    if (!monthFilter || !yearFilter) return;
-    
-    // Get unique months and years
-    const months = new Set();
-    const years = new Set();
-    
-    batches.forEach(batch => {
-        const date = new Date(batch.created_at);
-        const month = date.toLocaleDateString('en-US', { month: 'long' });
-        const year = date.getFullYear().toString();
-        
-        months.add(month);
-        years.add(year);
-    });
-    
-    // Populate month filter
-    monthFilter.innerHTML = '<option value="">All Months</option>';
-    Array.from(months).sort().forEach(month => {
-        monthFilter.innerHTML += `<option value="${month}">${month}</option>`;
-    });
-    
-    // Populate year filter
-    yearFilter.innerHTML = '<option value="">All Years</option>';
-    Array.from(years).sort((a, b) => b - a).forEach(year => {
-        yearFilter.innerHTML += `<option value="${year}">${year}</option>`;
-    });
-}
 
-function createMonthlyBreakdown(batches) {
-    const monthlyBreakdown = document.getElementById('monthlyBreakdown');
+
+
+
+
+
+
+
     
-    if (!monthlyBreakdown) return;
-    
-    // Group batches by month
-    const monthlyData = {};
-    
-    batches.forEach(batch => {
-        const date = new Date(batch.created_at);
-        const monthKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-        
-        if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = {
-                batches: 0,
-                files: 0,
-                parts: 0,
-                labor: 0,
-                tax: 0
-            };
-        }
-        
-        monthlyData[monthKey].batches++;
-        monthlyData[monthKey].files += batch.processed_invoices || 0;
-        monthlyData[monthKey].parts += batch.total_parts || 0;
-        monthlyData[monthKey].labor += batch.total_labor || 0;
-        monthlyData[monthKey].tax += batch.total_tax || 0;
-    });
-    
-    // Create monthly charts
-    monthlyBreakdown.innerHTML = Object.entries(monthlyData).map(([month, data]) => {
-        const chartId = `monthlyChart_${month.replace(/\s+/g, '_')}`;
-        
-        return `
-            <div class="monthly-chart-container">
-                <h5>${month}</h5>
-                <canvas id="${chartId}"></canvas>
-                <div class="monthly-stats">
-                    <p><strong>Batches:</strong> ${data.batches}</p>
-                    <p><strong>Files:</strong> ${data.files}</p>
-                    <p><strong>Total:</strong> $${(data.parts + data.labor + data.tax).toFixed(2)}</p>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    // Initialize charts for each month
-    Object.entries(monthlyData).forEach(([month, data]) => {
-        const chartId = `monthlyChart_${month.replace(/\s+/g, '_')}`;
-        const ctx = document.getElementById(chartId);
-        
-        if (ctx && data.parts + data.labor > 0) {
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Parts', 'Labor'],
-                    datasets: [{
-                        data: [data.parts, data.labor],
-                        backgroundColor: [
-                            'rgba(0, 123, 255, 0.8)', // Blue for parts
-                            'rgba(220, 53, 69, 0.8)'  // Red for labor
-                        ],
-                        borderColor: [
-                            'rgba(0, 123, 255, 1)',
-                            'rgba(220, 53, 69, 1)'
-                        ],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: 'var(--royal-black)',
-                                font: { size: 12 }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.label || '';
-                                    const value = context.parsed;
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                    return `${label}: $${value.toFixed(2)} (${percentage}%)`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-    });
-}
+
 
 
