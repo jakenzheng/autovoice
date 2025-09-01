@@ -461,9 +461,9 @@ class InvoiceClassifier {
         }
 
         // Show loading section
-        document.getElementById('uploadSection').style.display = 'none';
+        document.getElementById('uploadTab').style.display = 'none';
         document.getElementById('loadingSection').style.display = 'block';
-        document.getElementById('resultsSection').style.display = 'none';
+        document.getElementById('resultsTab').style.display = 'none';
 
         const formData = new FormData();
         this.selectedFiles.forEach(file => {
@@ -554,7 +554,10 @@ class InvoiceClassifier {
 
         // Show results section
         document.getElementById('loadingSection').style.display = 'none';
-        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('resultsTab').style.display = 'block';
+        
+        // Switch to results tab
+        switchContentTab('results');
     }
 
     populateResultsTable() {
@@ -621,8 +624,11 @@ class InvoiceClassifier {
 
     showUploadSection() {
         document.getElementById('loadingSection').style.display = 'none';
-        document.getElementById('resultsSection').style.display = 'none';
-        document.getElementById('uploadSection').style.display = 'block';
+        document.getElementById('resultsTab').style.display = 'none';
+        document.getElementById('uploadTab').style.display = 'block';
+        
+        // Switch to upload tab
+        switchContentTab('upload');
     }
 
     resetApp() {
