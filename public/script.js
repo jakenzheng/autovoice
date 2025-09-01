@@ -828,6 +828,25 @@ class InvoiceClassifier {
         }
     }
 
+    updateAnalytics() {
+        // Update analytics data when needed
+        const analyticsTotalParts = document.getElementById('analyticsTotalParts');
+        const analyticsTotalLabor = document.getElementById('analyticsTotalLabor');
+        const analyticsProcessedCount = document.getElementById('analyticsProcessedCount');
+        const analyticsFlaggedCount = document.getElementById('analyticsFlaggedCount');
+        
+        if (analyticsTotalParts && this.results.length > 0) {
+            const totalParts = this.results.reduce((sum, result) => sum + (parseFloat(result.parts) || 0), 0);
+            const totalLabor = this.results.reduce((sum, result) => sum + (parseFloat(result.labor) || 0), 0);
+            const flaggedCount = this.results.filter(result => result.flagged).length;
+            
+            analyticsTotalParts.textContent = `$${totalParts.toFixed(2)}`;
+            analyticsTotalLabor.textContent = `$${totalLabor.toFixed(2)}`;
+            analyticsProcessedCount.textContent = this.results.length;
+            analyticsFlaggedCount.textContent = flaggedCount;
+        }
+    }
+
     logout() {
         currentUser = null;
         authToken = null;
@@ -1124,11 +1143,21 @@ function switchContentTab(tabName) {
     if (selectedButton) {
         selectedButton.classList.add('active');
     }
+    
+    // Update analytics if switching to analytics tab
+    if (tabName === 'analytics' && window.invoiceClassifier) {
+        window.invoiceClassifier.updateAnalytics();
+    }
 }
 
 function showDashboard() {
     // Switch to dashboard tab
     switchContentTab('dashboard');
+}
+
+function showAnalytics() {
+    // Switch to analytics tab
+    switchContentTab('analytics');
 }
 
 

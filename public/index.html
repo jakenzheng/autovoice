@@ -150,6 +150,14 @@
                     </svg>
                     Upload Documents
                 </button>
+                <button class="tab-btn" onclick="switchContentTab('analytics')">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M3 3L17 17" stroke="currentColor" stroke-width="2"/>
+                        <path d="M17 3L3 17" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                    </svg>
+                    Analytics
+                </button>
                 <button class="tab-btn" onclick="switchContentTab('dashboard')">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
@@ -236,6 +244,49 @@
                             </svg>
                             Upload New Documents
                         </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Analytics Section -->
+            <section class="content-tab" id="analyticsTab">
+                <div class="analytics-container">
+                    <h2>Analytics Overview</h2>
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <h3>Processing Summary</h3>
+                            <div class="chart-container">
+                                <canvas id="partsLaborChart"></canvas>
+                            </div>
+                            <div class="analytics-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Total Parts</span>
+                                    <span class="stat-value" id="analyticsTotalParts">$0.00</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Total Labor</span>
+                                    <span class="stat-value" id="analyticsTotalLabor">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3>Document Status</h3>
+                            <div class="status-chart">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                            <div class="status-summary">
+                                <div class="status-item">
+                                    <span class="status-dot success"></span>
+                                    <span class="status-label">Processed</span>
+                                    <span class="status-count" id="analyticsProcessedCount">0</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-dot flagged"></span>
+                                    <span class="status-label">Flagged</span>
+                                    <span class="status-count" id="analyticsFlaggedCount">0</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
