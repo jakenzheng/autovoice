@@ -29,27 +29,9 @@
                     </div>
                 </div>
                 
-                <!-- Center: Main Navigation -->
+                <!-- Center: Brand Subtitle -->
                 <div class="header-center">
-                    <nav class="main-nav" id="mainNav" style="display: none;">
-                        <button class="nav-btn primary" onclick="showUploadSection()">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M10 2L10 18" stroke="currentColor" stroke-width="2"/>
-                                <path d="M2 10L18 10" stroke="currentColor" stroke-width="2"/>
-                            </svg>
-                            Upload
-                        </button>
-                        <button class="nav-btn secondary" onclick="showDashboard()">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
-                                <rect x="14" y="3" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
-                                <rect x="14" y="9" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
-                                <rect x="3" y="13" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
-                                <rect x="14" y="15" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
-                            </svg>
-                            Dashboard
-                        </button>
-                    </nav>
+                    <p class="subtitle">Invoice Scanner for Auto Repair Shops</p>
                 </div>
                 
                 <!-- Right: User Actions -->
@@ -159,8 +141,29 @@
 
         <!-- Main Content (hidden by default) -->
         <main id="mainContent" class="main-content" style="display: none;">
+            <!-- Tab Navigation -->
+            <div class="content-tabs">
+                <button class="tab-btn active" onclick="switchContentTab('upload')">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 2L10 18" stroke="currentColor" stroke-width="2"/>
+                        <path d="M2 10L18 10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    Upload Documents
+                </button>
+                <button class="tab-btn" onclick="switchContentTab('dashboard')">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <rect x="14" y="3" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <rect x="14" y="9" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <rect x="3" y="13" width="7" height="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <rect x="14" y="15" width="3" height="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                    </svg>
+                    Dashboard
+                </button>
+            </div>
+
             <!-- Upload Section -->
-            <section class="upload-section" id="uploadSection">
+            <section class="content-tab active" id="uploadTab">
                 <div class="upload-container">
                     <div class="upload-area" id="uploadArea">
                         <div class="upload-emblem">
@@ -207,6 +210,36 @@
                 </div>
             </section>
 
+            <!-- Dashboard Section -->
+            <section class="content-tab" id="dashboardTab">
+                <div class="dashboard-container">
+                    <h2>Dashboard</h2>
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <h3>Total Batches</h3>
+                            <p class="stat-number" id="dashboardTotalBatches">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Files</h3>
+                            <p class="stat-number" id="dashboardTotalFiles">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Flagged Documents</h3>
+                            <p class="stat-number" id="dashboardFlaggedCount">0</p>
+                        </div>
+                    </div>
+                    <div class="dashboard-actions">
+                        <button class="dashboard-btn" onclick="showUploadSection()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2L10 18" stroke="currentColor" stroke-width="2"/>
+                                <path d="M2 10L18 10" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Upload New Documents
+                        </button>
+                    </div>
+                </div>
+            </section>
+
             <!-- Loading Section -->
             <section class="loading-section" id="loadingSection" style="display: none;">
                 <div class="loading-container">
@@ -228,7 +261,7 @@
             </section>
 
             <!-- Results Section -->
-            <section class="results-section" id="resultsSection" style="display: none;">
+            <section class="content-tab" id="resultsTab" style="display: none;">
                 <div class="results-container">
                     <!-- Summary Cards -->
                     <div class="summary-grid">

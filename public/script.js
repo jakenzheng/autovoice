@@ -801,7 +801,6 @@ class InvoiceClassifier {
     updateAuthUI() {
         const authButtons = document.getElementById('authButtons');
         const userMenu = document.getElementById('userMenu');
-        const mainNav = document.getElementById('mainNav');
         const userName = document.getElementById('userName');
         const welcomeSection = document.getElementById('welcomeSection');
         const mainContent = document.getElementById('mainContent');
@@ -813,16 +812,17 @@ class InvoiceClassifier {
             console.log('User authenticated, showing main content');
             authButtons.style.display = 'none';
             userMenu.style.display = 'flex';
-            if (mainNav) mainNav.style.display = 'flex';
             userName.textContent = `${currentUser.firstName} ${currentUser.lastName}`;
             welcomeSection.style.display = 'none';
             mainContent.style.display = 'block';
+            
+            // Show upload tab by default
+            switchContentTab('upload');
         } else {
             // User is not authenticated - show welcome, hide main content
             console.log('User not authenticated, showing welcome section');
             authButtons.style.display = 'flex';
             userMenu.style.display = 'none';
-            if (mainNav) mainNav.style.display = 'none';
             welcomeSection.style.display = 'block';
             mainContent.style.display = 'none';
         }
@@ -1093,14 +1093,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Analytics functions
 function showUploadSection() {
-    const uploadSection = document.getElementById('uploadSection');
-    
-    if (uploadSection) {
-        uploadSection.style.display = 'block';
-    }
+    // Switch to upload tab
+    switchContentTab('upload');
     
     // Update navigation active state
     updateNavigationActive('showUploadSection');
+}
+
+function switchContentTab(tabName) {
+    // Hide all content tabs
+    const contentTabs = document.querySelectorAll('.content-tab');
+    contentTabs.forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all tab buttons
+    const tabButtons = document.querySelectorAll('.content-tabs .tab-btn');
+    tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    const selectedTab = document.getElementById(tabName + 'Tab');
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+    
+    // Add active class to selected tab button
+    const selectedButton = document.querySelector(`[onclick="switchContentTab('${tabName}')"]`);
+    if (selectedButton) {
+        selectedButton.classList.add('active');
+    }
+}
+
+function showDashboard() {
+    // Switch to dashboard tab
+    switchContentTab('dashboard');
 }
 
 
