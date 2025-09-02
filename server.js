@@ -40,20 +40,8 @@ const openai = new OpenAI({
 // Gemini AI configuration (commented out for future use)
 // const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyBf7ZEaaMJmvQyH1F5EinTkWTcNt6xK4t4');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads/';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Configure multer for file uploads - Vercel compatible
+const storage = multer.memoryStorage(); // Use memory storage for serverless
 
 const upload = multer({ 
   storage: storage,
@@ -74,14 +62,13 @@ const upload = multer({
 });
 
 // Invoice processing function with exact prompt from requirements and retry logic
-async function processInvoice(imagePath, filename = 'unknown') {
+async function processInvoice(imageBuffer, filename = 'unknown') {
   const maxRetries = 3;
   const baseDelay = 1000; // 1 second base delay
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Read image as base64
-      const imageBuffer = fs.readFileSync(imagePath);
+      // Convert buffer to base64
       const base64Image = imageBuffer.toString('base64');
 
       const prompt = `Analyze this invoice image completely and extract the following information in JSON format:
@@ -356,14 +343,13 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       const file = req.files[i];
       console.log(`Processing file ${i + 1}/${req.files.length}: ${file.originalname}`);
       
-      const result = await processInvoice(file.path, file.originalname);
+      const result = await processInvoice(file.buffer, file.originalname);
       
       if (result.success) {
         const data = result.data;
         
         // Add file info
         data.filename = file.originalname;
-        data.filepath = file.path;
         
         results.push(data);
         
@@ -386,7 +372,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                 original_filename: file.originalname,
                 file_size: file.size,
                 mime_type: file.mimetype,
-                image_url: `/uploads/${file.filename}`,
+                image_url: null, // No file storage on Vercel
                 extracted_parts: data.parts, // Store actual AI result, not parsed
                 extracted_labor: data.labor, // Store actual AI result, not parsed
                 extracted_tax: data.tax, // Store actual AI result (could be string or number)
@@ -420,7 +406,6 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       } else {
         results.push({
           filename: file.originalname,
-          filepath: file.path,
           error: result.error,
           flagged: true,
           quotaExceeded: result.quotaExceeded || false
@@ -449,15 +434,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       }
     }
 
-    // Store file paths for later viewing (don't delete immediately)
-    req.files.forEach(file => {
-      // Keep files for 1 hour, then clean up
-      setTimeout(() => {
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      }, 60 * 60 * 1000); // 1 hour
-    });
+    // No file cleanup needed with memory storage
 
     const summary = {
       totalParts: parseFloat(totalParts.toFixed(2)),
