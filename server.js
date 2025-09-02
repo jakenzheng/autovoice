@@ -287,9 +287,29 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Test upload endpoint for debugging
+app.post('/test-upload', upload.single('test'), (req, res) => {
+  console.log('🧪 Test upload received:', {
+    file: req.file,
+    body: req.body
+  });
+  res.json({ 
+    message: 'Test upload successful',
+    file: req.file ? req.file.originalname : 'No file',
+    body: req.body
+  });
+});
+
 app.post('/upload', upload.array('invoices', 50), async (req, res) => {
   try {
+    console.log('📤 Upload request received:', {
+      body: req.body,
+      files: req.files ? req.files.length : 'undefined',
+      contentType: req.headers['content-type']
+    });
+    
     if (!req.files || req.files.length === 0) {
+      console.log('❌ No files in request');
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
@@ -471,11 +491,20 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
 
 // Error handling middleware
 app.use((error, req, res, next) => {
+  console.error('🚨 Server error:', error);
+  
   if (error instanceof multer.MulterError) {
+    console.error('📁 Multer error:', error.code, error.message);
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ error: 'File too large. Maximum size is 100MB.' });
+    } else if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files. Maximum is 50.' });
+    } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: 'Unexpected file field.' });
     }
+    return res.status(400).json({ error: `File upload error: ${error.message}` });
   }
+  
   res.status(500).json({ error: error.message });
 });
 
