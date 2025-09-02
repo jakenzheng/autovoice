@@ -295,6 +295,17 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       contentType: req.headers['content-type']
     });
     
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ OpenAI API key not configured');
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    
+    // Check if Supabase is available
+    if (!supabase) {
+      console.log('⚠️  Supabase not configured, proceeding without database');
+    }
+    
     if (!req.files || req.files.length === 0) {
       console.log('❌ No files in request');
       return res.status(400).json({ error: 'No files uploaded' });
@@ -343,9 +354,10 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
       const file = req.files[i];
       console.log(`Processing file ${i + 1}/${req.files.length}: ${file.originalname}`);
       
-      const result = await processInvoice(file.buffer, file.originalname);
-      
-      if (result.success) {
+      try {
+        const result = await processInvoice(file.buffer, file.originalname);
+        
+        if (result.success) {
         const data = result.data;
         
         // Add file info
@@ -403,12 +415,21 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
         } else {
           flaggedCount++;
         }
-      } else {
+              } else {
+          results.push({
+            filename: file.originalname,
+            error: result.error,
+            flagged: true,
+            quotaExceeded: result.quotaExceeded || false
+          });
+          flaggedCount++;
+        }
+      } catch (processingError) {
+        console.error(`❌ Error processing ${file.originalname}:`, processingError);
         results.push({
           filename: file.originalname,
-          error: result.error,
-          flagged: true,
-          quotaExceeded: result.quotaExceeded || false
+          error: processingError.message || 'Processing failed',
+          flagged: true
         });
         flaggedCount++;
       }
