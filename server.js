@@ -253,6 +253,9 @@ Return ONLY valid JSON in this exact format:
   }
 }
 
+// Import authentication routes
+const authRoutes = require('./routes/auth');
+
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -268,6 +271,20 @@ app.get('/uploads/:filename', (req, res) => {
   } else {
     res.status(404).json({ error: 'File not found' });
   }
+});
+
+// Authentication API routes
+app.use('/api/auth', authRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    supabase: supabase ? 'connected' : 'not configured',
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 app.post('/upload', upload.array('invoices', 50), async (req, res) => {
