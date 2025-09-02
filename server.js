@@ -1,33 +1,17 @@
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
+const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { createClient } = require('@supabase/supabase-js');
-const sharp = require('sharp');
-const moment = require('moment');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
 require('dotenv').config();
 
-// Initialize Express app
 const app = express();
-const server = createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
+const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-
-
-// Supabase configuration (optional - will work without it)
+// Supabase configuration
 let supabase = null;
 try {
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -37,506 +21,454 @@ try {
         supabase = createClient(supabaseUrl, supabaseKey);
         console.log('✅ Supabase connected successfully');
     } else {
-        console.log('⚠️  Supabase environment variables not found - running in demo mode');
+        console.log('⚠️  Supabase environment variables not found - running without database');
     }
 } catch (error) {
-    console.log('⚠️  Supabase connection failed - running in demo mode');
+    console.log('⚠️  Supabase connection failed - running without database');
 }
 
-// Socket.io connection handling
-io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-    
-    socket.on('join-batch', (batchId) => {
-        socket.join(batchId);
-        console.log(`Client ${socket.id} joined batch ${batchId}`);
-    });
-    
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// OpenAI configuration
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Image processing functions
-async function generateThumbnail(imageBuffer, width = 200, height = 200) {
-    try {
-        const thumbnail = await sharp(imageBuffer)
-            .resize(width, height, { fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 80 })
-            .toBuffer();
-        return thumbnail.toString('base64');
-    } catch (error) {
-        console.error('Thumbnail generation error:', error);
-        return null;
-    }
-}
+// Gemini AI configuration (commented out for future use)
+// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyBf7ZEaaMJmvQyH1F5EinTkWTcNt6xK4t4');
 
-async function optimizeImage(imageBuffer) {
-    try {
-        const optimized = await sharp(imageBuffer)
-            .jpeg({ quality: 85, progressive: true })
-            .toBuffer();
-        return optimized;
-    } catch (error) {
-        console.error('Image optimization error:', error);
-        return imageBuffer; // Return original if optimization fails
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
     }
-}
-
-// File upload configuration - optimized for Vercel serverless
-const storage = multer.memoryStorage(); // Use memory storage for serverless
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
 
 const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|bmp|tiff/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        
-        if (mimetype && extname) {
-            return cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed'));
-        }
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|bmp|tiff/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
     }
+  },
+  limits: {
+    fileSize: 100 * 1024 * 1024 // 100MB limit
+  }
 });
 
-// Route imports
-const authRoutes = require('./routes/auth');
-const batchRoutes = require('./routes/batches');
-const invoiceRoutes = require('./routes/invoices');
-const analyticsRoutes = require('./routes/analytics');
-const fileRoutes = require('./routes/files');
-const exportRoutes = require('./routes/exports');
-
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/batches', batchRoutes);
-app.use('/api/invoices', invoiceRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/files', fileRoutes);
-app.use('/api/exports', exportRoutes);
-
-
-
-
-
-// Test route
-app.get('/test', (req, res) => {
-    res.json({ 
-        message: 'Server is running!', 
-        timestamp: new Date().toISOString(),
-        supabase: supabase ? 'connected' : 'demo mode',
-        environment: process.env.NODE_ENV || 'development',
-        version: '1.0.0'
-    });
-});
-
-// Upload route with enhanced error handling
-app.post('/upload', upload.array('invoices', 50), async (req, res) => {
+// Invoice processing function with exact prompt from requirements and retry logic
+async function processInvoice(imagePath, filename = 'unknown') {
+  const maxRetries = 3;
+  const baseDelay = 1000; // 1 second base delay
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-        if (!req.files || req.files.length === 0) {
-            return res.status(400).json({
-                error: 'No files uploaded',
-                message: 'Please select at least one file to upload'
-            });
-        }
+      // Read image as base64
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString('base64');
 
-        const files = req.files;
-        const batchName = req.body.batchName || `Batch ${new Date().toISOString().split('T')[0]}`;
-        const description = req.body.description || '';
-        
-        console.log(`Processing ${files.length} invoices...`);
+      const prompt = `Analyze this invoice image completely and extract the following information in JSON format:
 
-        // Get user from auth header (optional)
-        const authHeader = req.headers.authorization;
-        let userId = null;
-        
-        if (authHeader && authHeader.startsWith('Bearer ') && supabase) {
-            try {
-                const token = authHeader.substring(7);
-                const { data: { user }, error } = await supabase.auth.getUser(token);
-                if (!error && user) {
-                    userId = user.id;
-                }
-            } catch (error) {
-                console.log('Auth error, proceeding without user ID');
-            }
-        }
+REQUIREMENTS:
+1. PARTS (REQUIRED): Scan document for case insensitive strings contained within parts_list: ['parts', 'total', 'subtotal', 'sub-total', 'total due', 'invoice total']
+   - If more than one label per list is identified, select the value with a label that is stack-ranked higher in the list (closer to the front)
+   - Example: if both 'parts' and 'subtotal' exist, use value associated with 'parts' label
+   - After first pass, confirm the assigned parts value is the most appropriate value corresponding to the amount of money spent on parts this invoice was created for
+   - Extract monetary value (numbers only, no currency symbols)
+   - If no parts value found, return 0.00
 
-        // Create batch record (optional - only if Supabase is available)
-        let batchId = null;
-        if (supabase) {
-            try {
-                const { data: batch, error: batchError } = await supabase
-                    .from('batches')
-                    .insert({
-                        user_id: userId,
-                        batch_name: batchName,
-                        description: description,
-                        status: 'processing',
-                        total_invoices: files.length,
-                        processed_invoices: 0,
-                        total_parts: 0,
-                        total_labor: 0,
-                        total_tax: 0,
-                        flagged_count: 0,
-                        processing_started_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
+2. LABOR (OPTIONAL): Scan document for 'labor' (case insensitive)
+   - Extract monetary value (numbers only, no currency symbols)
+   - If no labor value found, return 0.00
+   - Note: document might not include install/physical labor (e.g., ordering bulk parts from car dealership)
 
-                if (batchError) {
-                    console.error('Batch creation error:', batchError);
-                } else {
-                    batchId = batch.id;
-                }
-            } catch (error) {
-                console.log('Batches table not available, proceeding without batch tracking');
-            }
-        }
+3. TAX (OPTIONAL): Scan document for 'tax' or 'sales tax' (case insensitive)
+   - Extract monetary value (numbers only, no currency symbols)
+   - If value is not a double/integer (e.g., "N/A", "Included"), store as string AND flag document for review
+   - If no tax value found, return 0.00
 
-        const results = [];
-        let totalParts = 0;
-        let totalLabor = 0;
-        let totalTax = 0;
-        let flaggedCount = 0;
-        let processedCount = 0;
+4. FLAGGED: Set to true if:
+   - Tax value is NOT 0.00 (any non-zero tax amount)
+   - Tax value is not a number (string value)
+   - Any extracted value seems incorrect or ambiguous
+   - Document is unclear or unreadable
 
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            console.log(`Processing file ${i + 1}/${files.length}: ${file.filename}`);
+5. CONFIDENCE: Perform multiple scans and cross-validation:
+   - Scan 1: Initial extraction of all values
+   - Scan 2: Re-verify each number by looking for the same label again
+   - Scan 3: Cross-reference with other similar labels to ensure consistency
+   - If all 3 scans return the same values: "high" confidence
+   - If 2 scans match but 1 differs: "medium" confidence  
+   - If scans show significant variation or uncertainty: "low" confidence
+   - Consider document clarity, number formatting, and label proximity
 
-            try {
-                // Emit progress update
-                if (batchId) {
-                    io.to(batchId).emit('processing-progress', {
-                        current: i + 1,
-                        total: files.length,
-                        filename: file.originalname,
-                        progress: Math.round(((i + 1) / files.length) * 100)
-                    });
-                }
-
-                // Optimize image
-                const imageBuffer = file.buffer; // Use file.buffer for memory storage
-                const optimizedBuffer = await optimizeImage(imageBuffer);
-                
-                // Generate thumbnail
-                const thumbnail = await generateThumbnail(imageBuffer);
-
-                // Process with GPT-4 AI
-                const data = await processInvoiceWithAI(optimizedBuffer);
-
-                // Store file record (optional - only if Supabase is available)
-                if (supabase && batchId) {
-                    try {
-                        await supabase
-                            .from('files')
-                            .insert({
-                                batch_id: batchId,
-                                user_id: userId,
-                                original_filename: file.originalname,
-                                file_size: file.size,
-                                mime_type: file.mimetype,
-                                image_url: `/uploads/${file.originalname}`, // Store original name as URL
-                                thumbnail_url: thumbnail ? `data:image/jpeg;base64,${thumbnail}` : null,
-                                extracted_parts: parseFloat(data.parts) || 0,
-                                extracted_labor: parseFloat(data.labor) || 0,
-                                extracted_tax: typeof data.tax === 'number' ? data.tax : 0,
-                                is_flagged: data.flagged || false,
-                                confidence_level: data.confidence || 'high',
-                                processing_metadata: {
-                                    processing_time: Date.now(),
-                                    ai_model: 'gpt-4'
-                                },
-                                processing_completed_at: new Date().toISOString()
-                            });
-                    } catch (error) {
-                        console.log('Files table not available, skipping file storage');
-                    }
-                }
-
-                results.push({
-                    filename: file.originalname,
-                    parts: data.parts,
-                    labor: data.labor,
-                    tax: data.tax,
-                    flagged: data.flagged,
-                    confidence: data.confidence,
-                    thumbnail: thumbnail ? `data:image/jpeg;base64,${thumbnail}` : null
-                });
-
-                totalParts += parseFloat(data.parts) || 0;
-                totalLabor += parseFloat(data.labor) || 0;
-                totalTax += typeof data.tax === 'number' ? data.tax : 0;
-                if (data.flagged) flaggedCount++;
-                processedCount++;
-
-                console.log(`Extracted data for ${file.originalname}:`, data);
-
-            } catch (error) {
-                console.error(`Error processing ${file.originalname}:`, error);
-                results.push({
-                    filename: file.originalname,
-                    error: 'Processing failed',
-                    parts: 0,
-                    labor: 0,
-                    tax: 0,
-                    flagged: false,
-                    confidence: 'low'
-                });
-            }
-        }
-
-        // Update batch status (optional - only if Supabase is available)
-        if (supabase && batchId) {
-            try {
-                await supabase
-                    .from('batches')
-                    .update({
-                        status: 'completed',
-                        processed_invoices: processedCount,
-                        total_parts: parseFloat(totalParts.toFixed(2)),
-                        total_labor: parseFloat(totalLabor.toFixed(2)),
-                        total_tax: parseFloat(totalTax.toFixed(2)),
-                        flagged_count: flaggedCount,
-                        processing_completed_at: new Date().toISOString()
-                    })
-                    .eq('id', batchId);
-            } catch (error) {
-                console.log('Could not update batch status');
-            }
-        }
-
-        const summary = {
-            totalParts: parseFloat(totalParts.toFixed(2)),
-            totalLabor: parseFloat(totalLabor.toFixed(2)),
-            totalTax: parseFloat(totalTax.toFixed(2)),
-            totalInvoices: files.length,
-            flaggedCount: flaggedCount,
-            processedCount: processedCount
-        };
-
-        console.log('Processing complete. Summary:', summary);
-
-        // Emit completion
-        if (batchId) {
-            io.to(batchId).emit('processing-complete', {
-                batchId: batchId,
-                summary: summary,
-                results: results
-            });
-        }
-
-        res.json({
-            success: true,
-            batchId: batchId,
-            summary: summary,
-            results: results
-        });
-
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({
-            error: 'Upload failed',
-            message: error.message || 'An error occurred during upload'
-        });
-    }
-});
-
-// AI processing function with GPT-4 for maximum accuracy
-async function processInvoiceWithAI(imageBuffer) {
-    try {
-        // Check if OpenAI API key is configured
-        if (!process.env.OPENAI_API_KEY) {
-            console.log('⚠️  OpenAI API key not found, using fallback processing');
-            return await processInvoiceFallback(imageBuffer);
-        }
-
-        const OpenAI = require('openai');
-        const openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY
-        });
-
-        // Convert buffer to base64 for OpenAI API
-        const base64Image = imageBuffer.toString('base64');
-        
-        // GPT-4 optimized prompt for automotive invoice analysis
-        const prompt = `You are an expert automotive invoice analyst. Analyze this invoice image and extract the following information with maximum accuracy:
-
-REQUIRED OUTPUT FORMAT (JSON only):
+Return ONLY valid JSON in this exact format:
 {
-  "parts": number (total parts cost, 0 if none),
-  "labor": number (total labor cost, 0 if none), 
-  "tax": number (total tax amount, 0 if none),
-  "flagged": boolean (true if any data is unclear or ambiguous),
-  "confidence": "high" | "medium" | "low"
-}
+  "parts": number,
+  "labor": number,
+  "tax": number or string,
+  "flagged": boolean,
+  "confidence": "high|medium|low"
+}`;
 
-CONFIDENCE GUIDELINES:
-- "high": Clear, readable text with obvious numerical values (use this when confident)
-- "medium": Some text is clear but some values need interpretation
-- "low": Poor image quality, unclear text, or ambiguous values
-
-EXTRACTION RULES:
-1. Look for "parts", "total", "subtotal", "amount" fields
-2. Look for "labor", "service", "work" fields  
-3. Look for "tax", "sales tax", "tax amount" fields
-4. Be confident when text is clear and values are obvious
-5. Only flag if text is truly unclear or values are ambiguous
-
-Return ONLY valid JSON, no other text.`;
-
-        console.log('🔄 Calling GPT-4 API...');
-        const response = await openai.chat.completions.create({
-            model: "gpt-4", // Using standard GPT-4 for maximum accuracy
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "text",
-                            text: prompt
-                        },
-                        {
-                            type: "image_url",
-                            image_url: {
-                                url: `data:image/jpeg;base64,${base64Image}`,
-                                detail: "high"
-                            }
-                        }
-                    ]
+      // OpenAI GPT-4 Vision implementation
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: prompt
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Image}`
                 }
-            ],
-            max_tokens: 500,
-            temperature: 0.1, // Low temperature for consistent results
-            response_format: { type: "json_object" }
-        });
-        console.log('✅ GPT-4 API response received');
+              }
+            ]
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.1
+      });
 
-        console.log('📝 Raw GPT-4 response:', response.choices[0].message.content);
-        const result = JSON.parse(response.choices[0].message.content);
-        console.log('🔍 Parsed result:', result);
+      const result = response.choices[0].message.content;
+      const text = result;
+      
+      // Gemini AI implementation (commented out for future use)
+      // const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      // const result = await model.generateContent([
+      //   prompt,
+      //   {
+      //     inlineData: {
+      //       mimeType: "image/jpeg",
+      //       data: base64Image
+      //     }
+      //   }
+      // ]);
+      // const response = await result.response;
+      // const text = response.text();
+      
+      // Clean the response text to extract JSON
+      let jsonText = text.trim();
+      
+      // Remove markdown code blocks if present
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      // Try to parse JSON response
+      try {
+        const parsed = JSON.parse(jsonText);
         
-        // Enhance confidence scoring for better results
-        const enhancedResult = enhanceConfidenceScore(result);
-        console.log('🚀 Enhanced result:', enhancedResult);
+        // Validate and normalize the response
+        const validatedData = {
+          parts: typeof parsed.parts === 'number' ? parsed.parts : parseFloat(parsed.parts) || 0.00,
+          labor: typeof parsed.labor === 'number' ? parsed.labor : parseFloat(parsed.labor) || 0.00,
+          tax: parsed.tax,
+          flagged: false, // Will be set based on tax value
+          confidence: parsed.confidence || 'medium'
+        };
         
-        return enhancedResult;
+        // Set flagged to true if tax is NOT 0.00 (as per requirements)
+        if (typeof validatedData.tax === 'number' && validatedData.tax !== 0.00) {
+          validatedData.flagged = true;
+        } else if (typeof validatedData.tax === 'string') {
+          validatedData.flagged = true;
+        }
+        
+        // Log the extracted data for debugging
+        console.log(`🤖 AI Extracted data for ${filename}:`, {
+          parts: validatedData.parts,
+          labor: validatedData.labor,
+          tax: validatedData.tax,
+          flagged: validatedData.flagged,
+          confidence: validatedData.confidence
+        });
+        console.log(`📝 Raw AI response:`, text);
+        
+        return {
+          success: true,
+          data: validatedData,
+          raw: text
+        };
+      } catch (parseError) {
+        console.error('JSON Parse Error:', parseError);
+        console.error('Raw Response:', text);
+        console.error('Cleaned JSON Text:', jsonText);
+        return {
+          success: false,
+          error: "Failed to parse AI response",
+          raw: text
+        };
+      }
 
     } catch (error) {
-        console.error('❌ GPT-4 API Error:', error);
-        console.error('❌ Error details:', error.message);
-        console.error('❌ Error stack:', error.stack);
-        
-        // Fallback to basic processing if GPT-4 fails
-        console.log('🔄 Falling back to basic processing...');
-        return await processInvoiceFallback(imageBuffer);
-    }
-}
-
-// Fallback processing function for when GPT-4 is unavailable
-async function processInvoiceFallback(imageBuffer) {
-    console.log('⚠️  FALLBACK FUNCTION CALLED - Using simulated data');
-    
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-    
-    // Return high confidence results for demo purposes
-    const invoiceTypes = [
-        { parts: 134.02, labor: 0, tax: 0, flagged: false, confidence: 'high' },
-        { parts: 713.36, labor: 95.56, tax: 66.93, flagged: false, confidence: 'high' },
-        { parts: 245.78, labor: 45.00, tax: 23.19, flagged: false, confidence: 'high' },
-        { parts: 892.15, labor: 120.00, tax: 89.22, flagged: false, confidence: 'high' },
-        { parts: 156.33, labor: 0, tax: 0, flagged: false, confidence: 'high' }
-    ];
-    
-    const fallbackResult = invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)];
-    console.log('🎲 Fallback result:', fallbackResult);
-    return fallbackResult;
-}
-
-// Function to enhance confidence scoring for better accuracy
-function enhanceConfidenceScore(result) {
-    // Start with the AI's confidence assessment
-    let confidence = result.confidence;
-    
-    // Enhance confidence if data looks consistent
-    if (result.parts > 0 && result.labor >= 0 && result.tax >= 0) {
-        // If we have valid numerical data, boost confidence
-        if (confidence === 'low') confidence = 'medium';
-        if (confidence === 'medium') confidence = 'high';
-    }
-    
-    // Only flag if truly necessary
-    if (result.flagged && confidence === 'high') {
-        // If AI says high confidence but flagged, reconsider
-        if (result.parts > 0 || result.labor > 0) {
-            result.flagged = false;
+      console.error(`Attempt ${attempt}/${maxRetries} failed for ${filename}:`, error.message);
+      
+      // Check if it's a quota/rate limit error
+      if (error.message.includes('429') || error.message.includes('quota') || error.message.includes('rate limit') || error.message.includes('billing')) {
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          console.log(`Rate limit hit. Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        } else {
+          return {
+            success: false,
+            error: "API quota exceeded. Please try again later or upgrade your plan.",
+            quotaExceeded: true
+          };
         }
+      }
+      
+      // For other errors, don't retry
+      return {
+        success: false,
+        error: error.message
+      };
     }
-    
-    // Ensure we're not being overly conservative
-    if (confidence === 'low' && (result.parts > 0 || result.labor > 0)) {
-        confidence = 'medium';
-    }
-    
-    return {
-        ...result,
-        confidence: confidence
-    };
+  }
 }
 
-// Global error handler
-app.use((error, req, res, next) => {
-    console.error('Global error handler:', error);
-    res.status(500).json({
-        error: 'Internal server error',
-        message: error.message || 'An unexpected error occurred'
-    });
+// Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({
-        error: 'Not found',
-        message: 'The requested resource was not found'
-    });
+// Serve uploaded images
+app.get('/uploads/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filepath = path.join(__dirname, 'uploads', filename);
+  
+  if (fs.existsSync(filepath)) {
+    res.sendFile(filepath);
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        supabase: supabase ? 'connected' : 'demo mode',
-        environment: process.env.NODE_ENV || 'development'
-    });
-});
-
-const PORT = process.env.PORT || 3000;
-
-// Start server
-server.listen(PORT, () => {
-    console.log(`🚗 Invoice Classifier running on http://localhost:${PORT}`);
-    console.log('✨ Luxury automotive invoice processing ready with OpenAI GPT-4 Vision');
-    console.log('📊 Processing up to 50 invoices per batch');
-    console.log('🔌 Socket.io real-time updates enabled');
-    if (!supabase) {
-        console.log('⚠️  Running in DEMO MODE - no database required');
+app.post('/upload', upload.array('invoices', 50), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
     }
-});
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+    // Create batch record if Supabase is available
+    let batchId = null;
+    if (supabase) {
+      try {
+        const { data: batch, error: batchError } = await supabase
+          .from('batches')
+          .insert({
+            batch_name: `Batch ${new Date().toLocaleDateString()}`,
+            description: `Invoice batch processed on ${new Date().toLocaleString()}`,
+            status: 'processing',
+            total_invoices: req.files.length,
+            processed_invoices: 0,
+            total_parts: 0,
+            total_labor: 0,
+            total_tax: 0,
+            flagged_count: 0
+          })
+          .select()
+          .single();
+
+        if (batchError) {
+          console.log('Could not create batch record:', batchError);
+        } else {
+          batchId = batch.id;
+          console.log('Created batch:', batchId);
+        }
+      } catch (error) {
+        console.log('Batch creation failed:', error);
+      }
+    }
+
+    const results = [];
+    let totalParts = 0;
+    let totalLabor = 0;
+    let totalTax = 0;
+    let flaggedCount = 0;
+
+    console.log(`Processing ${req.files.length} invoices...`);
+
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      console.log(`Processing file ${i + 1}/${req.files.length}: ${file.originalname}`);
+      
+      const result = await processInvoice(file.path, file.originalname);
+      
+      if (result.success) {
+        const data = result.data;
+        
+        // Add file info
+        data.filename = file.originalname;
+        data.filepath = file.path;
+        
+        results.push(data);
+        
+        // Store file record in Supabase if available
+        if (supabase && batchId) {
+          try {
+            console.log('📊 Storing in Supabase:', {
+              filename: file.originalname,
+              parts: data.parts,
+              labor: data.labor,
+              tax: data.tax,
+              flagged: data.flagged,
+              confidence: data.confidence
+            });
+            
+            await supabase
+              .from('files')
+              .insert({
+                batch_id: batchId,
+                original_filename: file.originalname,
+                file_size: file.size,
+                mime_type: file.mimetype,
+                image_url: `/uploads/${file.filename}`,
+                extracted_parts: data.parts, // Store actual AI result, not parsed
+                extracted_labor: data.labor, // Store actual AI result, not parsed
+                extracted_tax: data.tax, // Store actual AI result (could be string or number)
+                is_flagged: data.flagged,
+                confidence_level: data.confidence,
+                processing_metadata: {
+                  processing_time: Date.now(),
+                  ai_model: 'gpt-4o',
+                  raw_ai_response: result.raw // Store the actual AI response for debugging
+                },
+                processing_completed_at: new Date().toISOString()
+              });
+            console.log('✅ Supabase record stored successfully');
+          } catch (error) {
+            console.log('❌ Could not store file record:', error);
+          }
+        }
+        
+        // Calculate totals (excluding flagged documents)
+        if (!data.flagged) {
+          totalParts += data.parts || 0; // Use actual AI result
+          totalLabor += data.labor || 0; // Use actual AI result
+          
+          // Only add tax if it's a number
+          if (typeof data.tax === 'number') {
+            totalTax += data.tax;
+          }
+        } else {
+          flaggedCount++;
+        }
+      } else {
+        results.push({
+          filename: file.originalname,
+          filepath: file.path,
+          error: result.error,
+          flagged: true,
+          quotaExceeded: result.quotaExceeded || false
+        });
+        flaggedCount++;
+      }
+    }
+
+    // Update batch status if Supabase is available
+    if (supabase && batchId) {
+      try {
+        await supabase
+          .from('batches')
+          .update({
+            status: 'completed',
+            processed_invoices: results.length,
+            total_parts: parseFloat(totalParts.toFixed(2)),
+            total_labor: parseFloat(totalLabor.toFixed(2)),
+            total_tax: parseFloat(totalTax.toFixed(2)),
+            flagged_count: flaggedCount,
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', batchId);
+      } catch (error) {
+        console.log('Could not update batch status:', error);
+      }
+    }
+
+    // Store file paths for later viewing (don't delete immediately)
+    req.files.forEach(file => {
+      // Keep files for 1 hour, then clean up
+      setTimeout(() => {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      }, 60 * 60 * 1000); // 1 hour
     });
+
+    const summary = {
+      totalParts: parseFloat(totalParts.toFixed(2)),
+      totalLabor: parseFloat(totalLabor.toFixed(2)),
+      totalTax: parseFloat(totalTax.toFixed(2)),
+      totalInvoices: results.length,
+      flaggedCount,
+      processedCount: results.length - flaggedCount
+    };
+
+    console.log('Processing complete. Summary:', summary);
+    
+    // Check if quota was exceeded
+    const quotaExceededCount = results.filter(r => r.quotaExceeded).length;
+    if (quotaExceededCount > 0) {
+      console.log(`⚠️  ${quotaExceededCount} files failed due to API quota limit`);
+    }
+
+    res.json({
+      success: true,
+      batchId: batchId,
+      results,
+      summary
+    });
+
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Server error processing invoices' });
+  }
 });
 
-module.exports = app;
+// Error handling middleware
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 100MB.' });
+    }
+  }
+  res.status(500).json({ error: error.message });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚗 Invoice Classifier running on http://localhost:${PORT}`);
+  console.log(`✨ Luxury automotive invoice processing ready with OpenAI GPT-4 Vision`);
+  console.log(`📊 Processing up to 50 invoices per batch`);
+  if (supabase) {
+    console.log('✅ Supabase database integration enabled');
+  } else {
+    console.log('⚠️  Running without database storage');
+  }
+});
