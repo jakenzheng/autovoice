@@ -597,7 +597,6 @@ class InvoiceClassifier {
                 </td>
                 <td><span class="status-badge ${statusClass} clickable-status" onclick="window.invoiceClassifier.toggleStatus(${index})">${statusText}</span></td>
                 <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
-                <td><span class="reasoning-text">${result.reasoning || 'AI analysis completed'}</span></td>
                 <td>
                     <button class="view-btn" onclick="window.invoiceClassifier.showImageModal('${result.filename}', ${index})">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

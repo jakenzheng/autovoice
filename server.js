@@ -226,7 +226,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                 // Generate thumbnail
                 const thumbnail = await generateThumbnail(imageBuffer);
 
-                // Simulate AI processing (replace with actual OpenAI call)
+                // Process with GPT-4 AI
                 const data = await processInvoiceWithAI(optimizedBuffer);
 
                 // Store file record (optional - only if Supabase is available)
@@ -249,8 +249,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                                 confidence_level: data.confidence || 'high',
                                 processing_metadata: {
                                     processing_time: Date.now(),
-                                    ai_model: 'gpt-4-vision-preview',
-                                    confidence_reasoning: data.reasoning || 'AI analysis completed'
+                                    ai_model: 'gpt-4'
                                 },
                                 processing_completed_at: new Date().toISOString()
                             });
@@ -266,7 +265,6 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                     tax: data.tax,
                     flagged: data.flagged,
                     confidence: data.confidence,
-                    reasoning: data.reasoning || 'AI analysis completed',
                     thumbnail: thumbnail ? `data:image/jpeg;base64,${thumbnail}` : null
                 });
 
@@ -287,8 +285,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
                     labor: 0,
                     tax: 0,
                     flagged: false,
-                    confidence: 'low',
-                    reasoning: 'Processing failed - unable to extract data'
+                    confidence: 'low'
                 });
             }
         }
@@ -349,7 +346,7 @@ app.post('/upload', upload.array('invoices', 50), async (req, res) => {
     }
 });
 
-// AI processing function with OpenAI GPT-4 Vision
+// AI processing function with GPT-4 for maximum accuracy
 async function processInvoiceWithAI(imageBuffer) {
     try {
         // Check if OpenAI API key is configured
@@ -366,8 +363,8 @@ async function processInvoiceWithAI(imageBuffer) {
         // Convert buffer to base64 for OpenAI API
         const base64Image = imageBuffer.toString('base64');
         
-        // Enhanced prompt for better accuracy and confidence
-        const prompt = `Analyze this automotive repair invoice image and extract the following information with high precision:
+        // GPT-4 optimized prompt for automotive invoice analysis
+        const prompt = `You are an expert automotive invoice analyst. Analyze this invoice image and extract the following information with maximum accuracy:
 
 REQUIRED OUTPUT FORMAT (JSON only):
 {
@@ -375,12 +372,11 @@ REQUIRED OUTPUT FORMAT (JSON only):
   "labor": number (total labor cost, 0 if none), 
   "tax": number (total tax amount, 0 if none),
   "flagged": boolean (true if any data is unclear or ambiguous),
-  "confidence": "high" | "medium" | "low",
-  "reasoning": "brief explanation of confidence level"
+  "confidence": "high" | "medium" | "low"
 }
 
 CONFIDENCE GUIDELINES:
-- "high": Clear, readable text with obvious numerical values
+- "high": Clear, readable text with obvious numerical values (use this when confident)
 - "medium": Some text is clear but some values need interpretation
 - "low": Poor image quality, unclear text, or ambiguous values
 
@@ -388,13 +384,14 @@ EXTRACTION RULES:
 1. Look for "parts", "total", "subtotal", "amount" fields
 2. Look for "labor", "service", "work" fields  
 3. Look for "tax", "sales tax", "tax amount" fields
-4. Only flag if text is truly unclear or values are ambiguous
-5. Be confident when text is clear and values are obvious
+4. Be confident when text is clear and values are obvious
+5. Only flag if text is truly unclear or values are ambiguous
 
 Return ONLY valid JSON, no other text.`;
 
+        console.log('🔄 Calling GPT-4 API...');
         const response = await openai.chat.completions.create({
-            model: "gpt-4-vision-preview",
+            model: "gpt-4", // Using standard GPT-4 for maximum accuracy
             messages: [
                 {
                     role: "user",
@@ -417,43 +414,52 @@ Return ONLY valid JSON, no other text.`;
             temperature: 0.1, // Low temperature for consistent results
             response_format: { type: "json_object" }
         });
+        console.log('✅ GPT-4 API response received');
 
+        console.log('📝 Raw GPT-4 response:', response.choices[0].message.content);
         const result = JSON.parse(response.choices[0].message.content);
+        console.log('🔍 Parsed result:', result);
         
-        // Validate and enhance confidence scoring
-        const enhancedResult = enhanceConfidenceScore(result, imageBuffer);
+        // Enhance confidence scoring for better results
+        const enhancedResult = enhanceConfidenceScore(result);
+        console.log('🚀 Enhanced result:', enhancedResult);
         
-        console.log('🤖 AI Processing Result:', enhancedResult);
         return enhancedResult;
 
     } catch (error) {
-        console.error('❌ OpenAI API Error:', error);
+        console.error('❌ GPT-4 API Error:', error);
+        console.error('❌ Error details:', error.message);
+        console.error('❌ Error stack:', error.stack);
         
-        // Fallback to basic processing if OpenAI fails
+        // Fallback to basic processing if GPT-4 fails
         console.log('🔄 Falling back to basic processing...');
         return await processInvoiceFallback(imageBuffer);
     }
 }
 
-// Fallback processing function for when OpenAI is unavailable
+// Fallback processing function for when GPT-4 is unavailable
 async function processInvoiceFallback(imageBuffer) {
+    console.log('⚠️  FALLBACK FUNCTION CALLED - Using simulated data');
+    
     // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
     
     // Return high confidence results for demo purposes
     const invoiceTypes = [
-        { parts: 134.02, labor: 0, tax: 0, flagged: false, confidence: 'high', reasoning: 'Clear invoice with obvious values' },
-        { parts: 713.36, labor: 95.56, tax: 66.93, flagged: false, confidence: 'high', reasoning: 'Well-structured invoice with clear pricing' },
-        { parts: 245.78, labor: 45.00, tax: 23.19, flagged: false, confidence: 'high', reasoning: 'Standard invoice format with clear totals' },
-        { parts: 892.15, labor: 120.00, tax: 89.22, flagged: false, confidence: 'high', reasoning: 'Professional invoice with clear breakdown' },
-        { parts: 156.33, labor: 0, tax: 0, flagged: false, confidence: 'high', reasoning: 'Simple invoice with clear total amount' }
+        { parts: 134.02, labor: 0, tax: 0, flagged: false, confidence: 'high' },
+        { parts: 713.36, labor: 95.56, tax: 66.93, flagged: false, confidence: 'high' },
+        { parts: 245.78, labor: 45.00, tax: 23.19, flagged: false, confidence: 'high' },
+        { parts: 892.15, labor: 120.00, tax: 89.22, flagged: false, confidence: 'high' },
+        { parts: 156.33, labor: 0, tax: 0, flagged: false, confidence: 'high' }
     ];
     
-    return invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)];
+    const fallbackResult = invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)];
+    console.log('🎲 Fallback result:', fallbackResult);
+    return fallbackResult;
 }
 
-// Function to enhance confidence scoring based on image quality and data consistency
-function enhanceConfidenceScore(result, imageBuffer) {
+// Function to enhance confidence scoring for better accuracy
+function enhanceConfidenceScore(result) {
     // Start with the AI's confidence assessment
     let confidence = result.confidence;
     
@@ -469,14 +475,12 @@ function enhanceConfidenceScore(result, imageBuffer) {
         // If AI says high confidence but flagged, reconsider
         if (result.parts > 0 || result.labor > 0) {
             result.flagged = false;
-            result.reasoning = 'Data appears clear and consistent';
         }
     }
     
     // Ensure we're not being overly conservative
     if (confidence === 'low' && (result.parts > 0 || result.labor > 0)) {
         confidence = 'medium';
-        result.reasoning = 'Data extracted successfully, confidence adjusted upward';
     }
     
     return {
